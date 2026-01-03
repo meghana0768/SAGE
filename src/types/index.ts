@@ -129,32 +129,32 @@ export interface FamilyUpdate {
 export interface CognitiveProfile {
   userId: string;
   lastUpdated: Date;
-  overallTrend: 'stable' | 'improving' | 'declining' | 'variable';
+  overallTrend: 'stable' | 'improving' | 'declining' | 'variable' | null;
   languageComplexity: {
-    current: number;
-    trend: number; // positive = improving
-    weeklyAverage: number;
+    current: number | null;
+    trend: number | null; // positive = improving
+    weeklyAverage: number | null;
   };
   memoryRecall: {
-    current: number;
-    trend: number;
-    weeklyAverage: number;
+    current: number | null;
+    trend: number | null;
+    weeklyAverage: number | null;
   };
   attention: {
-    current: number;
-    trend: number;
-    weeklyAverage: number;
+    current: number | null;
+    trend: number | null;
+    weeklyAverage: number | null;
   };
   processingSpeed: {
-    current: number;
-    trend: number;
-    weeklyAverage: number;
+    current: number | null;
+    trend: number | null;
+    weeklyAverage: number | null;
   };
   emotionalPatterns: {
-    dominant: EmotionalState;
-    frequency: Record<EmotionalState, number>;
+    dominant: EmotionalState | null;
+    frequency: Record<EmotionalState, number> | null;
   };
-  peakCognitionTime: 'morning' | 'afternoon' | 'evening';
+  peakCognitionTime: 'morning' | 'afternoon' | 'evening' | null;
   recentInsights: Insight[];
 }
 
@@ -216,6 +216,15 @@ export interface MemorySession {
   status: 'active' | 'completed' | 'paused';
 }
 
+export interface TimelineEvent {
+  id: string;
+  date: Date; // Only events with dates are stored
+  title: string;
+  description: string;
+  chapter: LifeChapter;
+  sourceEntryId: string;
+}
+
 export interface BiographyEntry {
   id: string;
   chapter: LifeChapter;
@@ -235,6 +244,7 @@ export interface Biography {
   userId: string;
   title: string;
   entries: BiographyEntry[];
+  timelineEvents: TimelineEvent[];
   lastUpdated: Date;
   isComplete: boolean;
 }

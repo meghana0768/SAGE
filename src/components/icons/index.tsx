@@ -41,10 +41,16 @@ import {
   Meh,
   Frown,
   Activity,
-  Coffee
+  Coffee,
+  Download,
+  Filter,
+  LogOut,
+  Share2
 } from 'lucide-react';
 
 export {
+  LogOut,
+  Share2,
   Mic,
   MicOff,
   Home,
@@ -85,7 +91,9 @@ export {
   Meh,
   Frown,
   Activity,
-  Coffee
+  Coffee,
+  Download,
+  Filter
 };
 
 // Voice wave animation component

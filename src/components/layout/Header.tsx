@@ -2,11 +2,11 @@
 
 import { motion } from 'framer-motion';
 import { useStore } from '@/store/useStore';
-import { Logo, Settings, TimeOfDayIcon } from '@/components/icons';
+import { Logo, Settings, TimeOfDayIcon, LogOut } from '@/components/icons';
 import { getTimeOfDay } from '@/lib/speechAnalysis';
 
 export function Header() {
-  const { user, isCalmingMode, toggleCalmingMode } = useStore();
+  const { user, isCalmingMode, toggleCalmingMode, logout } = useStore();
   const timeOfDay = getTimeOfDay();
   
   const getGreeting = () => {
@@ -42,23 +42,35 @@ export function Header() {
           <div className="flex items-center gap-2">
             <button
               onClick={toggleCalmingMode}
-              className={`p-2 rounded-full transition-all ${
+              className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${
                 isCalmingMode 
                   ? 'bg-[var(--color-calm)] text-white' 
-                  : 'bg-[var(--color-sand)] text-[var(--color-stone)]'
+                  : 'bg-[var(--color-sand)] text-[var(--color-stone)] hover:bg-[var(--color-sage-light)]'
               }`}
               title={isCalmingMode ? 'Calming mode active' : 'Enable calming mode'}
             >
               <motion.span
                 animate={{ scale: isCalmingMode ? [1, 1.1, 1] : 1 }}
                 transition={{ repeat: isCalmingMode ? Infinity : 0, duration: 2 }}
+                className="text-lg"
               >
                 ✨
               </motion.span>
             </button>
             
-            <button className="p-2 rounded-full bg-[var(--color-sand)] text-[var(--color-stone)] hover:bg-[var(--color-sage-light)] transition-colors">
+            <button 
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-[var(--color-sand)] text-[var(--color-stone)] hover:bg-[var(--color-sage-light)] transition-colors"
+              title="Settings"
+            >
               <Settings size={20} />
+            </button>
+            
+            <button
+              onClick={logout}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-[var(--color-sand)] text-[var(--color-stone)] hover:bg-[var(--color-agitated)]/10 hover:text-[var(--color-agitated)] transition-colors"
+              title="Log out"
+            >
+              <LogOut size={20} />
             </button>
           </div>
         </div>

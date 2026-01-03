@@ -98,75 +98,119 @@ export function HomePage() {
             <div className="flex justify-between items-center">
               <span className="text-sm text-[var(--color-stone)]">Language</span>
               <span className="font-semibold text-[var(--color-charcoal)]">
-                {profile?.languageComplexity.current || 75}
+                {profile?.languageComplexity.current !== null && profile?.languageComplexity.current !== undefined 
+                  ? profile.languageComplexity.current 
+                  : 'N/A'}
               </span>
             </div>
-            <div className="h-2 bg-[var(--color-sand)] rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${profile?.languageComplexity.current || 75}%` }}
-                transition={{ duration: 0.8, delay: 0.4 }}
-                className="h-full rounded-full bg-[var(--color-sage)]"
-              />
-            </div>
+            {profile?.languageComplexity.current !== null && profile?.languageComplexity.current !== undefined ? (
+              <div className="h-2 bg-[var(--color-sand)] rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${profile.languageComplexity.current}%` }}
+                  transition={{ duration: 0.8, delay: 0.4 }}
+                  className="h-full rounded-full bg-[var(--color-sage)]"
+                />
+              </div>
+            ) : (
+              <div className="h-2 bg-[var(--color-sand)] rounded-full overflow-hidden">
+                <div className="h-full w-full flex items-center justify-center">
+                  <span className="text-xs text-[var(--color-stone)]">No data yet</span>
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-sm text-[var(--color-stone)]">Memory</span>
               <span className="font-semibold text-[var(--color-charcoal)]">
-                {profile?.memoryRecall.current || 72}
+                {profile?.memoryRecall.current !== null && profile?.memoryRecall.current !== undefined 
+                  ? profile.memoryRecall.current 
+                  : 'N/A'}
               </span>
             </div>
-            <div className="h-2 bg-[var(--color-sand)] rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${profile?.memoryRecall.current || 72}%` }}
-                transition={{ duration: 0.8, delay: 0.5 }}
-                className="h-full rounded-full bg-[var(--color-terracotta)]"
-              />
-            </div>
+            {profile?.memoryRecall.current !== null && profile?.memoryRecall.current !== undefined ? (
+              <div className="h-2 bg-[var(--color-sand)] rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${profile.memoryRecall.current}%` }}
+                  transition={{ duration: 0.8, delay: 0.5 }}
+                  className="h-full rounded-full bg-[var(--color-terracotta)]"
+                />
+              </div>
+            ) : (
+              <div className="h-2 bg-[var(--color-sand)] rounded-full overflow-hidden">
+                <div className="h-full w-full flex items-center justify-center">
+                  <span className="text-xs text-[var(--color-stone)]">No data yet</span>
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-sm text-[var(--color-stone)]">Attention</span>
               <span className="font-semibold text-[var(--color-charcoal)]">
-                {profile?.attention.current || 78}
+                {profile?.attention.current !== null && profile?.attention.current !== undefined 
+                  ? profile.attention.current 
+                  : 'N/A'}
               </span>
             </div>
-            <div className="h-2 bg-[var(--color-sand)] rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${profile?.attention.current || 78}%` }}
-                transition={{ duration: 0.8, delay: 0.6 }}
-                className="h-full rounded-full bg-[var(--color-calm)]"
-              />
-            </div>
+            {profile?.attention.current !== null && profile?.attention.current !== undefined ? (
+              <div className="h-2 bg-[var(--color-sand)] rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${profile.attention.current}%` }}
+                  transition={{ duration: 0.8, delay: 0.6 }}
+                  className="h-full rounded-full bg-[var(--color-calm)]"
+                />
+              </div>
+            ) : (
+              <div className="h-2 bg-[var(--color-sand)] rounded-full overflow-hidden">
+                <div className="h-full w-full flex items-center justify-center">
+                  <span className="text-xs text-[var(--color-stone)]">No data yet</span>
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-sm text-[var(--color-stone)]">Processing</span>
               <span className="font-semibold text-[var(--color-charcoal)]">
-                {profile?.processingSpeed.current || 70}
+                {profile?.processingSpeed.current !== null && profile?.processingSpeed.current !== undefined 
+                  ? profile.processingSpeed.current 
+                  : 'N/A'}
               </span>
             </div>
-            <div className="h-2 bg-[var(--color-sand)] rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${profile?.processingSpeed.current || 70}%` }}
-                transition={{ duration: 0.8, delay: 0.7 }}
-                className="h-full rounded-full bg-[var(--color-happy)]"
-              />
-            </div>
+            {profile?.processingSpeed.current !== null && profile?.processingSpeed.current !== undefined ? (
+              <div className="h-2 bg-[var(--color-sand)] rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${profile.processingSpeed.current}%` }}
+                  transition={{ duration: 0.8, delay: 0.7 }}
+                  className="h-full rounded-full bg-[var(--color-happy)]"
+                />
+              </div>
+            ) : (
+              <div className="h-2 bg-[var(--color-sand)] rounded-full overflow-hidden">
+                <div className="h-full w-full flex items-center justify-center">
+                  <span className="text-xs text-[var(--color-stone)]">No data yet</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
         
         <div className="mt-4 pt-4 border-t border-[var(--color-sand)]">
           <div className="flex items-center gap-2">
             <span className="text-sm text-[var(--color-stone)]">Overall Trend:</span>
-            <TrendIndicator value={profile?.languageComplexity.trend || 0} />
+            {profile?.overallTrend ? (
+              <TrendIndicator value={profile.languageComplexity.trend || 0} />
+            ) : (
+              <span className="text-sm text-[var(--color-stone)]">N/A</span>
+            )}
           </div>
         </div>
       </Card>
@@ -177,20 +221,7 @@ export function HomePage() {
           Quick Actions
         </h3>
         
-        <Card hover onClick={() => setActiveTab('speak')} delay={0.3}>
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--color-sage)] to-[var(--color-sage-dark)] flex items-center justify-center">
-              <Mic size={24} className="text-white" />
-            </div>
-            <div className="flex-1">
-              <h4 className="font-medium text-base text-[var(--color-charcoal)]">Start a Conversation</h4>
-              <p className="text-sm text-[var(--color-stone)]">Speak naturally, I'm here to listen</p>
-            </div>
-            <ChevronRight className="text-[var(--color-stone)]" />
-          </div>
-        </Card>
-        
-        <Card hover onClick={() => setActiveTab('games')} delay={0.35}>
+        <Card hover onClick={() => setActiveTab('games')} delay={0.3}>
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--color-terracotta)] to-[var(--color-terracotta-dark)] flex items-center justify-center">
               <Brain size={24} className="text-white" />

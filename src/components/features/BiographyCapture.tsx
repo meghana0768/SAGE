@@ -5,9 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '@/store/useStore';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { BookOpen, Mic, MicOff, RefreshCw, CheckCircle2, Clock } from '@/components/icons';
+import { BookOpen, Mic, MicOff, RefreshCw, CheckCircle2, Calendar } from '@/components/icons';
 import { processBiographyFromTranscript, generateFollowUpQuestions } from '@/lib/biographyProcessor';
-import type { LifeChapter, MemorySession, BiographyEntry } from '@/types';
+import { processSpeechResult } from '@/lib/punctuationProcessor';
+import { extractDatesFromText, hasEventWithoutDate, parseUserDate } from '@/lib/dateExtractor';
+import type { LifeChapter, MemorySession, BiographyEntry, TimelineEvent } from '@/types';
 
 const lifeChapters: { value: LifeChapter; label: string; icon: string }[] = [
   { value: 'childhood', label: 'Childhood', icon: '👶' },
@@ -70,7 +72,8 @@ export function BiographyCapture() {
     biography,
     addMemorySession,
     updateMemorySession,
-    addBiographyEntry
+    addBiographyEntry,
+    addTimelineEvent
   } = useStore();
 
   const [selectedChapter, setSelectedChapter] = useState<LifeChapter | null>(null);
@@ -80,7 +83,16 @@ export function BiographyCapture() {
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [pendingDatePrompt, setPendingDatePrompt] = useState<{ event: string; chapter: LifeChapter } | null>(null);
+  const [dateInput, setDateInput] = useState('');
   const transcriptBuilderRef = useRef<string>('');
+  const recognitionRef = useRef<any>(null);
+  const transcriptIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Check if Web Speech API is supported
+  const isSpeechRecognitionSupported = () => {
+    return 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+  };
 
   // Proactively suggest memory sessions
   useEffect(() => {
@@ -97,6 +109,22 @@ export function BiographyCapture() {
       return () => clearTimeout(timer);
     }
   }, [selectedChapter, memorySessions]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          // Ignore errors on cleanup
+        }
+      }
+      if (transcriptIntervalRef.current) {
+        clearInterval(transcriptIntervalRef.current);
+      }
+    };
+  }, []);
 
   const startMemorySession = useCallback((chapter: LifeChapter) => {
     const session: MemorySession = {
@@ -124,73 +152,152 @@ export function BiographyCapture() {
     setCurrentTranscript('');
     transcriptBuilderRef.current = '';
     
-    // Simulate transcript generation
-    const responses = demoResponses[currentSession.chapter] || [];
-    let selectedResponse: string;
-    
-    if (currentSession.chapter === 'career') {
-      // Check the current question to match specific responses
-      const currentQuestion = followUpQuestions[currentQuestionIndex] || 
-                              currentSession.questions[currentSession.questions.length]?.question || '';
-      const questionLower = currentQuestion.toLowerCase();
+    // Check if Web Speech API is supported
+    if (!isSpeechRecognitionSupported()) {
+      // Fallback to simulated recording for browsers without Web Speech API
+      const responses = demoResponses[currentSession.chapter] || [];
+      let selectedResponse: string;
       
-      // Match specific question to specific response
-      // MUST use second response for "What did you enjoy most about that work?"
-      if (questionLower.includes('what did you enjoy most') || 
-          questionLower.includes('enjoy most') ||
-          questionLower.includes('enjoy about') ||
-          questionLower.includes('enjoy most about')) {
-        // Use the second response: "I enjoyed the sense of purpose..."
-        selectedResponse = responses[1] || responses[0];
+      if (currentSession.chapter === 'career') {
+        const currentQuestion = followUpQuestions[currentQuestionIndex] || 
+                                currentSession.questions[currentSession.questions.length]?.question || '';
+        const questionLower = currentQuestion.toLowerCase();
+        
+        if (questionLower.includes('what did you enjoy most') || 
+            questionLower.includes('enjoy most') ||
+            questionLower.includes('enjoy about')) {
+          selectedResponse = responses[1] || responses[0];
+        } else {
+          selectedResponse = responses[0] || '';
+        }
       } else {
-        // Use the first response for initial questions: "I used to be in the military..."
-        selectedResponse = responses[0] || '';
+        selectedResponse = responses[Math.floor(Math.random() * responses.length)];
       }
-    } else {
-      // Random selection for other chapters
-      selectedResponse = responses[Math.floor(Math.random() * responses.length)];
+      
+      const words = selectedResponse.split(' ');
+      let currentWordIndex = 0;
+      
+      const interval = setInterval(() => {
+        if (currentWordIndex < words.length) {
+          transcriptBuilderRef.current = transcriptBuilderRef.current 
+            + (transcriptBuilderRef.current ? ' ' : '') 
+            + words[currentWordIndex];
+          setCurrentTranscript(transcriptBuilderRef.current);
+          currentWordIndex++;
+        } else {
+          clearInterval(interval);
+          transcriptIntervalRef.current = null;
+        }
+      }, 545);
+      
+      transcriptIntervalRef.current = interval;
+      return;
     }
     
-    const words = selectedResponse.split(' ');
-    let currentWordIndex = 0;
+    // Use Web Speech API for real voice recognition
+    const SpeechRecognition = (window as any).SpeechRecognition || 
+                             (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
     
-    // 110 wpm = ~545ms per word
-    const interval = setInterval(() => {
-      if (currentWordIndex < words.length) {
-        transcriptBuilderRef.current = transcriptBuilderRef.current 
-          + (transcriptBuilderRef.current ? ' ' : '') 
-          + words[currentWordIndex];
-        setCurrentTranscript(transcriptBuilderRef.current);
-        currentWordIndex++;
-      } else {
-        clearInterval(interval);
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    
+    // Handle results
+    recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+      
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
+        } else {
+          interimTranscript += transcript;
+        }
       }
-    }, 545); // ~110 wpm (60 seconds / 110 words = 0.545 seconds per word)
+      
+      // Process with punctuation
+      if (finalTranscript) {
+        // Get the current text before adding new final transcript
+        const existingText = transcriptBuilderRef.current;
+        // Process the new final transcript with punctuation
+        const processedFinal = processSpeechResult(finalTranscript.trim(), '', existingText);
+        transcriptBuilderRef.current = processedFinal;
+      }
+      
+      // Combine with interim transcript for display
+      const displayText = processSpeechResult('', interimTranscript, transcriptBuilderRef.current);
+      setCurrentTranscript(displayText);
+    };
+    
+    // Handle errors
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecording(false);
+      
+      if (event.error === 'not-allowed') {
+        alert('Microphone permission denied. Please allow microphone access in your browser settings.');
+      } else if (event.error === 'no-speech') {
+        // Not really an error, just no speech detected
+      }
+    };
+    
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+    
+    try {
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch (error) {
+      console.error('Failed to start recognition:', error);
+      setIsRecording(false);
+    }
   }, [currentSession, currentQuestionIndex, followUpQuestions]);
 
   const stopRecording = useCallback(async () => {
     setIsRecording(false);
     
-    if (!currentSession || !currentTranscript) return;
+    // Stop Web Speech API recognition
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      } catch (error) {
+        console.error('Error stopping recognition:', error);
+      }
+    }
+    
+    // Stop fallback simulation
+    if (transcriptIntervalRef.current) {
+      clearInterval(transcriptIntervalRef.current);
+    }
+    
+    // Use final transcript from ref
+    const finalTranscript = transcriptBuilderRef.current || currentTranscript;
+    
+    if (!currentSession || !finalTranscript.trim()) return;
     
     // Update session with transcript
     updateMemorySession(currentSession.id, {
-      transcript: currentTranscript,
+      transcript: finalTranscript,
       questions: [
         ...currentSession.questions,
         {
           question: followUpQuestions[currentQuestionIndex] || 'Tell me about this chapter of your life',
-          response: currentTranscript,
+          response: finalTranscript,
           timestamp: new Date()
         }
       ]
     });
     
     // Generate empathetic follow-up questions
-    const questions = generateFollowUpQuestions(currentSession.chapter, [currentTranscript]);
+    const questions = generateFollowUpQuestions(currentSession.chapter, [finalTranscript]);
     setFollowUpQuestions(questions);
     
     setCurrentTranscript('');
+    transcriptBuilderRef.current = '';
   }, [currentSession, currentTranscript, followUpQuestions, currentQuestionIndex, updateMemorySession]);
 
   const completeSession = useCallback(async () => {
@@ -209,6 +316,65 @@ export function BiographyCapture() {
     );
     
     addBiographyEntry(biographyEntry);
+    
+    // Extract dates and create timeline events
+    const extractedDates = extractDatesFromText(fullTranscript);
+    const hasEvent = hasEventWithoutDate(fullTranscript);
+    
+    // Always try to create timeline events from the transcript
+    if (extractedDates.length > 0) {
+      // Create one timeline event per unique date found
+      const uniqueDates = new Map<string, Date>();
+      extractedDates.forEach((extractedDate) => {
+        if (extractedDate.date) {
+          const dateKey = extractedDate.date.toISOString().split('T')[0]; // Use date as key
+          if (!uniqueDates.has(dateKey)) {
+            uniqueDates.set(dateKey, extractedDate.date);
+          }
+        }
+      });
+      
+      // Create timeline events for each unique date
+      uniqueDates.forEach((date) => {
+        // Extract a better title from the transcript
+        const sentences = fullTranscript.split(/[.!?]+/).filter(s => s.trim().length > 10);
+        const titleSentence = sentences.find(s => 
+          /\b(19|20)\d{2}\b/.test(s) || 
+          /\b(married|graduated|moved|started|began|ended|retired|born|traveled|visited|met|got|had|bought|sold|built|created|won|achieved|accomplished)\b/i.test(s)
+        ) || sentences[0] || fullTranscript.substring(0, 100);
+        
+        const timelineEvent: TimelineEvent = {
+          id: crypto.randomUUID(),
+          date: date,
+          title: `${currentSession.chapter.charAt(0).toUpperCase() + currentSession.chapter.slice(1)}: ${titleSentence.trim().substring(0, 80)}${titleSentence.length > 80 ? '...' : ''}`,
+          description: fullTranscript,
+          chapter: currentSession.chapter,
+          sourceEntryId: biographyEntry.id
+        };
+        addTimelineEvent(timelineEvent);
+      });
+    } else if (hasEvent) {
+      // Event mentioned but no date - prompt user
+      setPendingDatePrompt({
+        event: fullTranscript.substring(0, 100),
+        chapter: currentSession.chapter
+      });
+      setIsProcessing(false);
+      return; // Don't complete yet, wait for date
+    } else {
+      // No dates found and no clear events, but still create a timeline entry with session date
+      // This ensures all story sessions are captured
+      const timelineEvent: TimelineEvent = {
+        id: crypto.randomUUID(),
+        date: new Date(), // Use current date as fallback
+        title: `${currentSession.chapter.charAt(0).toUpperCase() + currentSession.chapter.slice(1)}: ${fullTranscript.substring(0, 80)}${fullTranscript.length > 80 ? '...' : ''}`,
+        description: fullTranscript,
+        chapter: currentSession.chapter,
+        sourceEntryId: biographyEntry.id
+      };
+      addTimelineEvent(timelineEvent);
+    }
+    
     updateMemorySession(currentSession.id, { status: 'completed' });
     
     setIsProcessing(false);
@@ -216,7 +382,56 @@ export function BiographyCapture() {
     setSelectedChapter(null);
     setCurrentTranscript('');
     setFollowUpQuestions([]);
-  }, [currentSession, addBiographyEntry, updateMemorySession]);
+    setPendingDatePrompt(null);
+  }, [currentSession, addBiographyEntry, addTimelineEvent, updateMemorySession]);
+  
+  const handleDateSubmit = useCallback(() => {
+    if (!pendingDatePrompt || !currentSession) return;
+    
+    const parsedDate = parseUserDate(dateInput);
+    
+    if (parsedDate) {
+      // Create timeline event with the provided date
+      const fullTranscript = currentSession.questions
+        .map(q => `Q: ${q.question}\nA: ${q.response}`)
+        .join('\n\n');
+      
+      const timelineEvent: TimelineEvent = {
+        id: crypto.randomUUID(),
+        date: parsedDate,
+        title: `${pendingDatePrompt.chapter.charAt(0).toUpperCase() + pendingDatePrompt.chapter.slice(1)}: ${pendingDatePrompt.event.substring(0, 50)}...`,
+        description: fullTranscript,
+        chapter: pendingDatePrompt.chapter,
+        sourceEntryId: crypto.randomUUID()
+      };
+      
+      addTimelineEvent(timelineEvent);
+      setPendingDatePrompt(null);
+      setDateInput('');
+      
+      // Now complete the session
+      updateMemorySession(currentSession.id, { status: 'completed' });
+      setIsProcessing(false);
+      setCurrentSession(null);
+      setSelectedChapter(null);
+      setCurrentTranscript('');
+      setFollowUpQuestions([]);
+    }
+  }, [pendingDatePrompt, dateInput, currentSession, addTimelineEvent, updateMemorySession]);
+  
+  const handleSkipDate = useCallback(() => {
+    if (!currentSession) return;
+    
+    // Skip adding to timeline, just complete the session
+    updateMemorySession(currentSession.id, { status: 'completed' });
+    setPendingDatePrompt(null);
+    setDateInput('');
+    setIsProcessing(false);
+    setCurrentSession(null);
+    setSelectedChapter(null);
+    setCurrentTranscript('');
+    setFollowUpQuestions([]);
+  }, [currentSession, updateMemorySession]);
 
   const getChapterIcon = (chapter: LifeChapter) => {
     return lifeChapters.find(c => c.value === chapter)?.icon || '📖';
@@ -394,10 +609,59 @@ export function BiographyCapture() {
               </div>
             )}
 
-            {isProcessing && (
+            {isProcessing && !pendingDatePrompt && (
               <Card className="text-center py-8">
                 <div className="animate-spin w-8 h-8 border-4 border-[var(--color-sage)] border-t-transparent rounded-full mx-auto mb-4" />
                 <p className="text-[var(--color-stone)]">Processing your story...</p>
+              </Card>
+            )}
+
+            {pendingDatePrompt && (
+              <Card className="border-2 border-[var(--color-sage)]">
+                <div className="flex items-center gap-3 mb-4">
+                  <Calendar size={24} className="text-[var(--color-sage)]" />
+                  <h3 className="text-lg font-display font-semibold text-[var(--color-charcoal)]">
+                    When did this happen?
+                  </h3>
+                </div>
+                <p className="text-sm text-[var(--color-stone)] mb-4">
+                  I noticed you mentioned an event but didn't include a date. When did this happen? 
+                  (You can say "I don't remember" to skip adding it to the timeline.)
+                </p>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    value={dateInput}
+                    onChange={(e) => setDateInput(e.target.value)}
+                    placeholder="e.g., 1965, January 1965, or January 15, 1965"
+                    className="w-full px-4 py-3 rounded-xl border-2 border-[var(--color-sand)] focus:border-[var(--color-sage)] focus:outline-none transition-colors text-[var(--color-charcoal)]"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        if (dateInput.toLowerCase().includes("don't remember") || dateInput.toLowerCase().includes("don't know") || dateInput.toLowerCase().includes("not sure")) {
+                          handleSkipDate();
+                        } else {
+                          handleDateSubmit();
+                        }
+                      }
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleDateSubmit}
+                      fullWidth
+                      disabled={!dateInput.trim()}
+                    >
+                      Add to Timeline
+                    </Button>
+                    <Button
+                      onClick={handleSkipDate}
+                      variant="secondary"
+                      fullWidth
+                    >
+                      Skip (Don't Remember)
+                    </Button>
+                  </div>
+                </div>
               </Card>
             )}
           </Card>

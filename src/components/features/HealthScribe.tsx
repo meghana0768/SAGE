@@ -7,51 +7,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Heart, Mic, MicOff, Activity, AlertCircle, CheckCircle2 } from '@/components/icons';
 import { detectHealthIntent, generateHealthFollowUpQuestions, extractPainLevel } from '@/lib/healthIntentDetection';
+import { processSpeechResult } from '@/lib/punctuationProcessor';
 import type { HealthEntry, HealthIntent } from '@/types';
-
-// Demo responses for health-related conversations
-const healthDemoResponses: Record<HealthIntent, string[]> = {
-  symptom: [
-    "I've been feeling a bit dizzy this morning. It started after breakfast.",
-    "I feel nauseous and haven't been able to eat much today.",
-    "I've had a headache for the past few hours. It's not too bad though."
-  ],
-  medication: [
-    "Did I take my blood pressure pill this morning? I can't remember.",
-    "I think I forgot to take my medication. What time was I supposed to take it?",
-    "I took my morning pills, but I'm not sure if I took the evening ones."
-  ],
-  pain: [
-    "My back has been hurting. It's about a 6 out of 10.",
-    "I have some pain in my knee. Maybe a 4 or 5.",
-    "The pain isn't too bad, maybe a 3. It comes and goes."
-  ],
-  appointment: [
-    "I have a doctor's appointment next week. I should write that down.",
-    "When is my next checkup? I think it's coming up soon.",
-    "I need to call the doctor about my test results."
-  ],
-  mood: [
-    "I've been feeling a bit anxious lately. Not sure why.",
-    "I'm feeling good today, much better than yesterday.",
-    "I've been a bit down. Maybe it's the weather."
-  ],
-  sleep: [
-    "I didn't sleep well last night. Maybe 4 or 5 hours.",
-    "I slept great! Got a full 8 hours for once.",
-    "I keep waking up during the night. It's frustrating."
-  ],
-  nutrition: [
-    "I haven't eaten much today. Just some toast for breakfast.",
-    "I had a good lunch. Chicken and vegetables.",
-    "My appetite has been off lately. Nothing sounds good."
-  ],
-  general: [
-    "I'm feeling okay overall, just a bit tired.",
-    "Everything seems fine. No complaints really.",
-    "I've been taking care of myself, eating well and resting."
-  ]
-};
 
 export function HealthScribe() {
   const {
@@ -69,7 +26,14 @@ export function HealthScribe() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [followUpResponses, setFollowUpResponses] = useState<{ question: string; response: string }[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const transcriptBuilderRef = useRef<string>('');
+  const recognitionRef = useRef<any>(null);
+  
+  // Check if Web Speech API is supported
+  const isSpeechRecognitionSupported = () => {
+    return 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+  };
 
   // Monitor transcript for health intents
   useEffect(() => {
@@ -86,6 +50,11 @@ export function HealthScribe() {
   }, [currentTranscript, isHealthMode, setIsHealthMode]);
 
   const startRecording = useCallback(() => {
+    if (!isSpeechRecognitionSupported()) {
+      setErrorMessage('Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.');
+      return;
+    }
+
     setIsRecording(true);
     setCurrentTranscript('');
     transcriptBuilderRef.current = '';
@@ -93,21 +62,103 @@ export function HealthScribe() {
     setFollowUpQuestions([]);
     setCurrentQuestionIndex(0);
     setFollowUpResponses([]);
+    setErrorMessage(null);
+
+    // Initialize Web Speech API
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setErrorMessage('Speech recognition is not available.');
+      setIsRecording(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      // Process with punctuation
+      const processedText = processSpeechResult(
+        finalTranscript,
+        interimTranscript,
+        transcriptBuilderRef.current
+      );
+      
+      transcriptBuilderRef.current = processedText;
+      setCurrentTranscript(processedText);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      if (event.error === 'no-speech') {
+        // User stopped speaking, but don't show error
+        return;
+      } else if (event.error === 'audio-capture') {
+        setErrorMessage('Microphone not found. Please check your microphone settings.');
+      } else if (event.error === 'not-allowed') {
+        setErrorMessage('Microphone permission denied. Please allow microphone access in your browser settings.');
+      } else {
+        setErrorMessage(`Speech recognition error: ${event.error}`);
+      }
+      setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      // Don't automatically stop recording - let user control it
+      // This allows them to continue speaking
+    };
+
+    recognitionRef.current = recognition;
+    
+    try {
+      recognition.start();
+    } catch (error) {
+      console.error('Error starting recognition:', error);
+      setErrorMessage('Failed to start speech recognition. Please try again.');
+      setIsRecording(false);
+    }
   }, []);
 
   const stopRecording = useCallback(() => {
+    // Stop speech recognition
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (error) {
+        console.error('Error stopping recognition:', error);
+      }
+      recognitionRef.current = null;
+    }
+    
     setIsRecording(false);
     
-    if (!currentTranscript) return;
-    
-    // Detect intent if not already detected
-    if (!detectedIntent) {
-      const intent = detectHealthIntent(currentTranscript);
-      if (intent) {
-        setDetectedIntent(intent);
-        setIsHealthMode(true);
-        const questions = generateHealthFollowUpQuestions(intent);
-        setFollowUpQuestions(questions);
+    // Finalize transcript with punctuation
+    if (transcriptBuilderRef.current) {
+      const finalTranscript = transcriptBuilderRef.current.trim();
+      setCurrentTranscript(finalTranscript);
+      
+      // Detect intent if not already detected
+      if (!detectedIntent && finalTranscript.length > 0) {
+        const intent = detectHealthIntent(finalTranscript);
+        if (intent) {
+          setDetectedIntent(intent);
+          setIsHealthMode(true);
+          const questions = generateHealthFollowUpQuestions(intent);
+          setFollowUpQuestions(questions);
+        }
       }
     }
   }, [currentTranscript, detectedIntent, setIsHealthMode]);
@@ -115,13 +166,14 @@ export function HealthScribe() {
   const answerFollowUp = useCallback(async () => {
     if (!detectedIntent || currentQuestionIndex >= followUpQuestions.length) {
       // Save health entry
-      const painLevel = extractPainLevel(currentTranscript);
+      const finalTranscript = transcriptBuilderRef.current.trim() || currentTranscript;
+      const painLevel = extractPainLevel(finalTranscript);
       
       const healthEntry: HealthEntry = {
         id: crypto.randomUUID(),
         timestamp: new Date(),
         intent: detectedIntent || 'general',
-        primaryConcern: currentTranscript,
+        primaryConcern: finalTranscript,
         followUpQuestions: followUpResponses.map(r => ({
           question: r.question,
           response: r.response,
@@ -141,6 +193,7 @@ export function HealthScribe() {
       setIsProcessing(false);
       setIsHealthMode(false);
       setCurrentTranscript('');
+      transcriptBuilderRef.current = '';
       setDetectedIntent(null);
       setFollowUpQuestions([]);
       setCurrentQuestionIndex(0);
@@ -150,33 +203,21 @@ export function HealthScribe() {
     
     // Add response and move to next question
     const currentQuestion = followUpQuestions[currentQuestionIndex];
+    const responseText = transcriptBuilderRef.current.trim() || currentTranscript;
     setFollowUpResponses(prev => [
       ...prev,
-      { question: currentQuestion, response: currentTranscript }
+      { question: currentQuestion, response: responseText }
     ]);
     
     setCurrentQuestionIndex(prev => prev + 1);
     setCurrentTranscript('');
-    setIsRecording(true);
+    transcriptBuilderRef.current = '';
     
-    // Simulate next question response
-    const responses = healthDemoResponses[detectedIntent] || [];
-    const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-    const words = randomResponse.split(' ');
-    let currentWordIndex = 0;
-    
-    const interval = setInterval(() => {
-      if (currentWordIndex < words.length) {
-        transcriptBuilderRef.current = transcriptBuilderRef.current 
-          + (transcriptBuilderRef.current ? ' ' : '') 
-          + words[currentWordIndex];
-        setCurrentTranscript(transcriptBuilderRef.current);
-        currentWordIndex++;
-      } else {
-        clearInterval(interval);
-      }
-    }, 300);
-  }, [detectedIntent, currentQuestionIndex, followUpQuestions, currentTranscript, followUpResponses, addHealthEntry, setIsHealthMode]);
+    // Start recording for next question
+    setTimeout(() => {
+      startRecording();
+    }, 100);
+  }, [detectedIntent, currentQuestionIndex, followUpQuestions, currentTranscript, followUpResponses, addHealthEntry, setIsHealthMode, startRecording]);
 
   const getIntentIcon = (intent: HealthIntent) => {
     switch (intent) {
@@ -246,6 +287,20 @@ export function HealthScribe() {
           </p>
           <Button onClick={startRecording} icon={<Mic size={20} />} size="lg">
             Start Health Check
+          </Button>
+        </Card>
+      )}
+
+      {errorMessage && (
+        <Card className="border-2 border-[var(--color-agitated)] bg-[var(--color-agitated)]/10">
+          <p className="text-sm text-[var(--color-agitated)]">{errorMessage}</p>
+          <Button
+            onClick={() => setErrorMessage(null)}
+            variant="secondary"
+            size="sm"
+            className="mt-2"
+          >
+            Dismiss
           </Button>
         </Card>
       )}

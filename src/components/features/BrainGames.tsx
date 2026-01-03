@@ -17,6 +17,7 @@ import {
   getRandomCategorySortingGame,
   getRandomPatternCompletionGame
 } from '@/lib/gameData';
+import { matchAnswer } from '@/lib/answerMatcher';
 import type { 
   MemoryGame, 
   AttentionGame, 
@@ -63,7 +64,7 @@ function MemoryGamePlay({
   onComplete 
 }: { 
   game: MemoryGame; 
-  onComplete: (result: Partial<CognitiveGameResult>) => void;
+  onComplete: (result: Partial<CognitiveGameResult> & { detailedResults?: any }) => void;
 }) {
   const [phase, setPhase] = useState<'story' | 'questions' | 'complete'>('story');
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -79,12 +80,20 @@ function MemoryGamePlay({
     if (currentQuestion < game.questions.length - 1) {
       setCurrentQuestion(prev => prev + 1);
     } else {
-      // Calculate results
-      const correctCount = newAnswers.filter((answer, idx) => 
-        game.questions[idx].correctAnswer.toLowerCase().includes(answer) ||
-        answer.includes(game.questions[idx].correctAnswer.toLowerCase())
-      ).length;
+      // Calculate results with detailed answer comparison using advanced matching
+      const detailedResults = game.questions.map((q, idx) => {
+        const userAnswer = newAnswers[idx] || '';
+        const isCorrect = matchAnswer(userAnswer, q.correctAnswer);
+        
+        return {
+          question: q.question,
+          userAnswer: userAnswer || '(no answer)',
+          correctAnswer: q.correctAnswer,
+          isCorrect
+        };
+      });
       
+      const correctCount = detailedResults.filter(r => r.isCorrect).length;
       const accuracy = Math.round((correctCount / game.questions.length) * 100);
       const responseTime = (Date.now() - startTime) / game.questions.length;
       
@@ -94,13 +103,14 @@ function MemoryGamePlay({
         responseTime,
         repetitionsNeeded: 0,
         frustrationDetected: false,
-        completed: true
+        completed: true,
+        detailedResults
       });
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-3xl mx-auto">
       <AnimatePresence mode="wait">
         {phase === 'story' && (
           <motion.div
@@ -113,7 +123,7 @@ function MemoryGamePlay({
               <h3 className="text-lg font-display font-semibold text-[var(--color-charcoal)] mb-4">
                 Listen to this story
               </h3>
-              <p className="text-lg text-[var(--color-charcoal)] leading-relaxed mb-6">
+              <p className="text-base text-[var(--color-charcoal)] leading-relaxed mb-6 max-w-2xl">
                 {game.content}
               </p>
               <Button onClick={() => setPhase('questions')} fullWidth>
@@ -130,7 +140,7 @@ function MemoryGamePlay({
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
           >
-            <Card>
+            <Card className="max-w-2xl mx-auto">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-sm text-[var(--color-stone)]">
                   Question {currentQuestion + 1} of {game.questions.length}
@@ -151,7 +161,7 @@ function MemoryGamePlay({
                 </div>
               </div>
               
-              <h3 className="text-xl font-display font-semibold text-[var(--color-charcoal)] mb-6">
+              <h3 className="text-lg font-display font-semibold text-[var(--color-charcoal)] mb-6 leading-relaxed">
                 {game.questions[currentQuestion].question}
               </h3>
               
@@ -161,7 +171,7 @@ function MemoryGamePlay({
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && inputValue && handleSubmitAnswer()}
                 placeholder="Type your answer..."
-                className="w-full p-4 rounded-xl border-2 border-[var(--color-sand)] focus:border-[var(--color-sage)] outline-none text-lg mb-4"
+                className="w-full p-4 rounded-xl border-2 border-[var(--color-sand)] focus:border-[var(--color-sage)] outline-none text-base mb-4"
                 autoFocus
               />
               
@@ -571,7 +581,12 @@ function GameResults({
   gameType, 
   onPlayAgain 
 }: { 
-  result: Partial<CognitiveGameResult>; 
+  result: Partial<CognitiveGameResult> & { detailedResults?: Array<{
+    question: string;
+    userAnswer: string;
+    correctAnswer: string;
+    isCorrect: boolean;
+  }> }; 
   gameType: GameType;
   onPlayAgain: () => void;
 }) {
@@ -588,44 +603,105 @@ function GameResults({
   };
 
   return (
-    <Card className="text-center">
-      <motion.div
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ type: 'spring', duration: 0.5 }}
-        className="w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center"
-        style={{ backgroundColor: getScoreColor(result.accuracy || 0) }}
-      >
-        <CheckCircle2 size={48} className="text-white" />
-      </motion.div>
-      
-      <h3 className="text-2xl font-display font-bold text-[var(--color-charcoal)] mb-2">
-        {result.accuracy}% Accuracy
-      </h3>
-      
-      <p className="text-[var(--color-stone)] mb-6">
-        {getMessage(result.accuracy || 0)}
-      </p>
-      
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="p-3 bg-[var(--color-sand)] rounded-xl">
-          <p className="text-xs text-[var(--color-stone)]">Response Time</p>
-          <p className="text-lg font-semibold text-[var(--color-charcoal)]">
-            {Math.round((result.responseTime || 0) / 1000)}s
-          </p>
+    <div className="space-y-6 max-w-3xl mx-auto">
+      <Card className="text-center max-w-2xl mx-auto">
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', duration: 0.5 }}
+          className="w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center"
+          style={{ backgroundColor: getScoreColor(result.accuracy || 0) }}
+        >
+          <CheckCircle2 size={48} className="text-white" />
+        </motion.div>
+        
+        <h3 className="text-2xl font-display font-bold text-[var(--color-charcoal)] mb-2">
+          {result.accuracy}% Accuracy
+        </h3>
+        
+        <p className="text-[var(--color-stone)] mb-6">
+          {getMessage(result.accuracy || 0)}
+        </p>
+        
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="p-3 bg-[var(--color-sand)] rounded-xl">
+            <p className="text-xs text-[var(--color-stone)]">Response Time</p>
+            <p className="text-lg font-semibold text-[var(--color-charcoal)]">
+              {Math.round((result.responseTime || 0) / 1000)}s
+            </p>
+          </div>
+          <div className="p-3 bg-[var(--color-sand)] rounded-xl">
+            <p className="text-xs text-[var(--color-stone)]">Game Type</p>
+            <p className="text-lg font-semibold text-[var(--color-charcoal)] capitalize">
+              {gameType.replace('_', ' ')}
+            </p>
+          </div>
         </div>
-        <div className="p-3 bg-[var(--color-sand)] rounded-xl">
-          <p className="text-xs text-[var(--color-stone)]">Game Type</p>
-          <p className="text-lg font-semibold text-[var(--color-charcoal)] capitalize">
-            {gameType.replace('_', ' ')}
-          </p>
-        </div>
-      </div>
+      </Card>
+
+      {/* Detailed Results for Memory Recall */}
+      {gameType === 'memory_recall' && result.detailedResults && (
+        <Card className="max-w-2xl mx-auto">
+          <h3 className="text-xl font-display font-semibold text-[var(--color-charcoal)] mb-4">
+            Answer Review
+          </h3>
+          <div className="space-y-4">
+            {result.detailedResults.map((detail, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.1 }}
+                className={`p-4 rounded-xl border-2 ${
+                  detail.isCorrect 
+                    ? 'bg-[var(--color-sage)]/10 border-[var(--color-sage)]' 
+                    : 'bg-[var(--color-agitated)]/10 border-[var(--color-agitated)]'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  {detail.isCorrect ? (
+                    <CheckCircle2 size={20} className="text-[var(--color-sage)] mt-0.5 flex-shrink-0" />
+                  ) : (
+                    <div className="w-5 h-5 rounded-full bg-[var(--color-agitated)] flex items-center justify-center mt-0.5 flex-shrink-0">
+                      <span className="text-white text-xs font-bold">×</span>
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-[var(--color-charcoal)] mb-2 leading-relaxed">
+                      {detail.question}
+                    </p>
+                    <div className="space-y-1.5">
+                      <div>
+                        <span className="text-sm text-[var(--color-stone)]">Your answer: </span>
+                        <span className={`text-sm font-medium ${
+                          detail.isCorrect 
+                            ? 'text-[var(--color-sage)]' 
+                            : 'text-[var(--color-agitated)]'
+                        }`}>
+                          {detail.userAnswer}
+                        </span>
+                      </div>
+                      {!detail.isCorrect && (
+                        <div>
+                          <span className="text-sm text-[var(--color-stone)]">Correct answer: </span>
+                          <span className="text-sm font-medium text-[var(--color-sage)]">
+                            {detail.correctAnswer}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </Card>
+      )}
       
       <Button onClick={onPlayAgain} variant="secondary" fullWidth icon={<RefreshCw size={18} />}>
         Try Another Game
       </Button>
-    </Card>
+    </div>
   );
 }
 
@@ -662,7 +738,7 @@ export function BrainGames() {
     }
   };
 
-  const handleGameComplete = useCallback((result: Partial<CognitiveGameResult>) => {
+  const handleGameComplete = useCallback((result: Partial<CognitiveGameResult> & { detailedResults?: any }) => {
     setGameResult(result);
     
     const fullResult: CognitiveGameResult = {

@@ -6,6 +6,7 @@ import { ReactNode } from 'react';
 interface ButtonProps {
   children: ReactNode;
   onClick?: () => void;
+  type?: 'button' | 'submit' | 'reset';
   variant?: 'primary' | 'secondary' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
@@ -18,6 +19,7 @@ interface ButtonProps {
 export function Button({
   children,
   onClick,
+  type = 'button',
   variant = 'primary',
   size = 'md',
   disabled = false,
@@ -42,6 +44,7 @@ export function Button({
 
   return (
     <motion.button
+      type={type}
       whileHover={{ scale: disabled ? 1 : 1.02 }}
       whileTap={{ scale: disabled ? 1 : 0.98 }}
       onClick={onClick}

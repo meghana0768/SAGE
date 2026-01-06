@@ -1501,6 +1501,8 @@ export function getRandomPatternCompletionGame(): PatternCompletionGame {
 // Sample insights for demo
 export const sampleInsights = [
   {
+    id: 'sample-1',
+    timestamp: new Date(),
     type: 'language' as const,
     severity: 'info' as const,
     title: 'Morning Clarity Strong',
@@ -1508,6 +1510,8 @@ export const sampleInsights = [
     recommendation: 'Consider scheduling important calls and activities before noon.'
   },
   {
+    id: 'sample-2',
+    timestamp: new Date(),
     type: 'memory' as const,
     severity: 'info' as const,
     title: 'Memory Recall Stable',
@@ -1515,6 +1519,8 @@ export const sampleInsights = [
     recommendation: 'Continue with current memory activities to maintain this positive trend.'
   },
   {
+    id: 'sample-3',
+    timestamp: new Date(),
     type: 'pattern' as const,
     severity: 'notable' as const,
     title: 'Evening Repetition Pattern',
@@ -1522,6 +1528,8 @@ export const sampleInsights = [
     recommendation: 'This is a common pattern. Consider earlier dinner times and calming evening routines.'
   },
   {
+    id: 'sample-4',
+    timestamp: new Date(),
     type: 'emotion' as const,
     severity: 'info' as const,
     title: 'Calm Engagement Dominant',
@@ -1529,6 +1537,8 @@ export const sampleInsights = [
     recommendation: 'The current interaction patterns are creating a comfortable experience.'
   },
   {
+    id: 'sample-5',
+    timestamp: new Date(),
     type: 'attention' as const,
     severity: 'info' as const,
     title: 'Focus Duration Improving',

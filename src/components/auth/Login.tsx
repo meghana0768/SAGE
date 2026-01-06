@@ -54,6 +54,12 @@ export function Login({ onBack }: LoginProps) {
             <div className="flex justify-center mb-4">
               <Logo size="lg" />
             </div>
+            <button
+              onClick={onBack}
+              className="text-sm text-[var(--color-stone)] hover:text-[var(--color-sage)] hover:underline transition-colors"
+            >
+              ← Go back to home
+            </button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">

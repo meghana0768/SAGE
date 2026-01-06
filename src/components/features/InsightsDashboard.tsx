@@ -17,6 +17,7 @@ import {
   generateWeeklyTrends
 } from '@/lib/mockData';
 import { sampleInsights } from '@/lib/gameData';
+import type { Insight } from '@/types';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, 
   PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, 
@@ -162,7 +163,7 @@ function exportToPDF(data: any[], filename: string) {
   printWindow.print();
 }
 
-function InsightCard({ insight }: { insight: typeof sampleInsights[0] }) {
+function InsightCard({ insight }: { insight: Insight }) {
   const severityColors = {
     info: 'border-l-[var(--color-sage)]',
     notable: 'border-l-[var(--color-terracotta)]',
@@ -419,8 +420,8 @@ function OverviewTab({ dateFilter }: { dateFilter: DateFilter }) {
           </span>
         </div>
         <div className="space-y-3">
-          {(filteredInsights.length > 0 ? filteredInsights : sampleInsights).slice(0, 5).map((insight, idx) => (
-            <InsightCard key={insight.id || idx} insight={insight} />
+          {(filteredInsights.length > 0 ? filteredInsights : sampleInsights).slice(0, 5).map((insight) => (
+            <InsightCard key={insight.id} insight={insight} />
           ))}
           {filteredInsights.length === 0 && (
             <Card>

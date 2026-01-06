@@ -179,7 +179,7 @@ export function HealthScribe() {
           response: r.response,
           timestamp: new Date()
         })),
-        painLevel,
+        painLevel: painLevel ?? undefined,
         notes: '',
         tags: []
       };

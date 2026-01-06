@@ -121,6 +121,10 @@ export function Onboarding() {
   const [userName, setUserName] = useState('');
   const [showNameInput, setShowNameInput] = useState(false);
 
+  // Ensure currentStep is within valid bounds
+  const safeStep = Math.max(0, Math.min(currentStep, steps.length - 1));
+  const currentStepData = steps[safeStep];
+
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
       setCurrentStep(prev => prev + 1);
@@ -134,6 +138,17 @@ export function Onboarding() {
       completeOnboarding(userName.trim());
     }
   };
+
+  // Safety check - return early if step data is not available
+  if (!currentStepData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-[var(--color-stone)]">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6">
@@ -172,21 +187,21 @@ export function Onboarding() {
                   transition={{ type: 'spring', delay: 0.2 }}
                   className="p-6 bg-[var(--color-sand)] rounded-3xl"
                 >
-                  {steps[currentStep].icon}
+                  {currentStepData.icon}
                 </motion.div>
               </div>
 
               {/* Title & Description */}
               <h1 className="text-2xl font-display font-bold text-[var(--color-charcoal)] mb-2">
-                {steps[currentStep].title}
+                {currentStepData.title}
               </h1>
               <p className="text-[var(--color-stone)] mb-6">
-                {steps[currentStep].description}
+                {currentStepData.description}
               </p>
 
               {/* Step content */}
               <div className="mb-8">
-                {steps[currentStep].content}
+                {currentStepData.content}
               </div>
 
               {/* Navigation */}

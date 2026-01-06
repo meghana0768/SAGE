@@ -140,20 +140,26 @@ export const useStore = create<AppState>()(
       // Actions
       login: (username, password) => {
         // Login only - does not create accounts
-        const storedUsers = JSON.parse(localStorage.getItem('voicesense-users') || '{}');
-        const normalizedUsername = username.trim().toLowerCase();
-        
-        // Check if user exists and password matches
-        if (storedUsers[normalizedUsername] && storedUsers[normalizedUsername].password === password) {
-          const userData = storedUsers[normalizedUsername];
+        try {
+          const storedUsers = JSON.parse(localStorage.getItem('voicesense-users') || '{}');
+          const normalizedUsername = username.trim().toLowerCase();
           
-          // Load user data into state and save immediately
-          set((state) => {
+          // Check if user exists and password matches
+          if (storedUsers[normalizedUsername] && storedUsers[normalizedUsername].password === password) {
+            const userData = storedUsers[normalizedUsername];
+            
+            // Load user data into state - check for isOnboarded (handle true, 'true', or any truthy value)
+            // If isOnboarded is not explicitly set, default to true (user logged in successfully, so they've completed onboarding)
+            let isOnboardedValue = true; // Default to true for existing users
+            if (userData.hasOwnProperty('isOnboarded')) {
+              isOnboardedValue = userData.isOnboarded === true || userData.isOnboarded === 'true' || userData.isOnboarded === 1;
+            }
+            
             const updatedState = {
               isAuthenticated: true, 
               currentUserId: normalizedUsername,
               user: userData.user || null,
-              isOnboarded: userData.isOnboarded || false,
+              isOnboarded: isOnboardedValue, // Use the checked value
               speechAnalyses: userData.speechAnalyses || [],
               gameResults: userData.gameResults || [],
               insights: userData.insights || [],
@@ -162,24 +168,34 @@ export const useStore = create<AppState>()(
               medicalJournal: userData.medicalJournal || null
             };
             
-            // Save user data to localStorage immediately after setting state
-            storedUsers[normalizedUsername] = {
-              ...storedUsers[normalizedUsername],
-              user: updatedState.user,
-              isOnboarded: updatedState.isOnboarded,
-              speechAnalyses: updatedState.speechAnalyses,
-              gameResults: updatedState.gameResults,
-              insights: updatedState.insights,
-              memorySessions: updatedState.memorySessions,
-              biography: updatedState.biography,
-              medicalJournal: updatedState.medicalJournal
-            };
-            localStorage.setItem('voicesense-users', JSON.stringify(storedUsers));
+            // Set the state directly
+            set(updatedState);
             
-            return updatedState;
-          });
-          
-          return true;
+            // Save user data to localStorage immediately - ensure isOnboarded is saved as boolean
+            try {
+              storedUsers[normalizedUsername] = {
+                ...storedUsers[normalizedUsername],
+                password: storedUsers[normalizedUsername].password,
+                user: updatedState.user,
+                isOnboarded: isOnboardedValue, // Save as boolean
+                speechAnalyses: updatedState.speechAnalyses,
+                gameResults: updatedState.gameResults,
+                insights: updatedState.insights,
+                memorySessions: updatedState.memorySessions,
+                biography: updatedState.biography,
+                medicalJournal: updatedState.medicalJournal
+              };
+              localStorage.setItem('voicesense-users', JSON.stringify(storedUsers));
+            } catch (e) {
+              // localStorage not available, continue anyway
+              console.warn('localStorage not available, data not saved');
+            }
+            
+            return true;
+          }
+        } catch (e) {
+          // localStorage not available or error parsing
+          console.warn('localStorage error during login:', e);
         }
         
         // User doesn't exist or password doesn't match
@@ -261,13 +277,16 @@ export const useStore = create<AppState>()(
       
       setUser: (user) => set({ user }),
       
-      completeOnboarding: (name) => set((state) => {
+      completeOnboarding: (name) => {
+        const state = useStore.getState();
         // Use current username if available, otherwise use the provided name
         const usernameToUse = state.currentUserId || name;
         const newUser = generateInitialUser(usernameToUse);
         // Update name and preferredName with the provided name from onboarding
         newUser.name = name;
         newUser.preferredName = name.split(' ')[0];
+        
+        let finalUser = newUser;
         
         // If there's existing data, calculate profile from it
         if (state.speechAnalyses.length > 0 || state.gameResults.length > 0) {
@@ -276,16 +295,32 @@ export const useStore = create<AppState>()(
             state.gameResults,
             newUser.cognitiveProfile
           );
-          return {
-            user: { ...newUser, cognitiveProfile: calculatedProfile },
-            isOnboarded: true
-          };
+          finalUser = { ...newUser, cognitiveProfile: calculatedProfile };
         }
-        return {
-          user: newUser,
+        
+        // Update state
+        set({
+          user: finalUser,
           isOnboarded: true
-        };
-      }),
+        });
+        
+        // Immediately save to localStorage
+        if (state.currentUserId) {
+          const storedUsers = JSON.parse(localStorage.getItem('voicesense-users') || '{}');
+          storedUsers[state.currentUserId] = {
+            ...storedUsers[state.currentUserId],
+            user: finalUser,
+            isOnboarded: true,
+            speechAnalyses: state.speechAnalyses,
+            gameResults: state.gameResults,
+            insights: state.insights,
+            memorySessions: state.memorySessions,
+            biography: state.biography,
+            medicalJournal: state.medicalJournal
+          };
+          localStorage.setItem('voicesense-users', JSON.stringify(storedUsers));
+        }
+      },
       
       setIsRecording: (isRecording) => set({ isRecording }),
       
@@ -481,22 +516,23 @@ export const useStore = create<AppState>()(
         medicalJournal: state.medicalJournal
       }),
       onRehydrateStorage: () => (state) => {
-        // After rehydration, save user data to separate storage
+        // After rehydration, if user is authenticated, load their actual data from voicesense-users
+        // This ensures we use the correct isOnboarded status
         if (state?.isAuthenticated && state.currentUserId) {
           const storedUsers = JSON.parse(localStorage.getItem('voicesense-users') || '{}');
-          if (storedUsers[state.currentUserId]) {
-            storedUsers[state.currentUserId] = {
-              ...storedUsers[state.currentUserId],
-              user: state.user,
-              isOnboarded: state.isOnboarded,
-              speechAnalyses: state.speechAnalyses,
-              gameResults: state.gameResults,
-              insights: state.insights,
-              memorySessions: state.memorySessions,
-              biography: state.biography,
-              medicalJournal: state.medicalJournal
-            };
-            localStorage.setItem('voicesense-users', JSON.stringify(storedUsers));
+          const userData = storedUsers[state.currentUserId];
+          if (userData) {
+            // Override rehydrated state with actual user data from storage
+            useStore.setState({
+              user: userData.user || state.user,
+              isOnboarded: userData.isOnboarded === true ? true : (state.isOnboarded || false),
+              speechAnalyses: userData.speechAnalyses || state.speechAnalyses || [],
+              gameResults: userData.gameResults || state.gameResults || [],
+              insights: userData.insights || state.insights || [],
+              memorySessions: userData.memorySessions || state.memorySessions || [],
+              biography: userData.biography || state.biography,
+              medicalJournal: userData.medicalJournal || state.medicalJournal
+            });
           }
         }
       }

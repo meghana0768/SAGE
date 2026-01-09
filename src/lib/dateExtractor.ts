@@ -75,7 +75,7 @@ export function extractDatesFromText(text: string): ExtractedDate[] {
  */
 export function hasEventWithoutDate(text: string): boolean {
   // Look for event keywords - expanded list
-  const eventKeywords = /\b(married|graduated|moved|started|began|ended|retired|born|died|traveled|visited|met|got|had|bought|sold|built|created|won|achieved|accomplished|joined|left|opened|closed|moved to|moved from|got married|got divorced|had children|had a child|started working|started school|finished|completed|learned|taught|discovered|invented|founded|established|launched|published|awarded|received|celebrated|anniversary|birthday|wedding|graduation|promotion|retirement)\b/i;
+  const eventKeywords = /\b(married|graduated|moved|started|began|ended|retired|born|died|traveled|visited|met|got|had|bought|sold|built|created|won|achieved|accomplished|joined|left|opened|closed|moved to|moved from|got married|got divorced|had children|had a child|started working|started school|finished|completed|learned|taught|discovered|invented|founded|established|launched|published|awarded|received|celebrated|anniversary|birthday|wedding|graduation|promotion|retirement)\b/gi;
   
   // Check if there's an event keyword but no date nearby (within 100 characters for better detection)
   const matches = [...text.matchAll(eventKeywords)];

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '@/store/useStore';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { BookOpen, Mic, MicOff, RefreshCw, CheckCircle2, Calendar } from '@/components/icons';
+import { BookOpen, Mic, MicOff, RefreshCw, CheckCircle2, Calendar, X } from '@/components/icons';
 import { processBiographyFromTranscript, generateFollowUpQuestions } from '@/lib/biographyProcessor';
 import { processSpeechResult } from '@/lib/punctuationProcessor';
 import { extractDatesFromText, hasEventWithoutDate, parseUserDate } from '@/lib/dateExtractor';
@@ -279,17 +279,26 @@ export function BiographyCapture() {
     
     if (!currentSession || !finalTranscript.trim()) return;
     
-    // Update session with transcript
+    // Create the new question entry
+    const newQuestion = {
+      question: followUpQuestions[currentQuestionIndex] || 'Tell me about this chapter of your life',
+      response: finalTranscript,
+      timestamp: new Date()
+    };
+    
+    // Update both the store and local state
+    const updatedQuestions = [...currentSession.questions, newQuestion];
+    
     updateMemorySession(currentSession.id, {
       transcript: finalTranscript,
-      questions: [
-        ...currentSession.questions,
-        {
-          question: followUpQuestions[currentQuestionIndex] || 'Tell me about this chapter of your life',
-          response: finalTranscript,
-          timestamp: new Date()
-        }
-      ]
+      questions: updatedQuestions
+    });
+    
+    // Update local session state so UI reflects the new question
+    setCurrentSession({
+      ...currentSession,
+      transcript: finalTranscript,
+      questions: updatedQuestions
     });
     
     // Generate empathetic follow-up questions
@@ -556,9 +565,20 @@ export function BiographyCapture() {
                     ? "I'd love to hear about this chapter of your life. When you're ready, start speaking."
                     : "Ready for the next question? Start speaking when you're ready."}
                 </p>
-                <Button onClick={startRecording} icon={<Mic size={20} />}>
-                  Start Speaking
-                </Button>
+                <div className="flex flex-col gap-3 items-center">
+                  <Button onClick={startRecording} icon={<Mic size={20} />}>
+                    Start Speaking
+                  </Button>
+                  {currentSession.questions.length > 0 && (
+                    <Button 
+                      onClick={completeSession} 
+                      variant="secondary"
+                      icon={<X size={18} />}
+                    >
+                      End Conversation & Save
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
 

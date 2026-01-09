@@ -2,11 +2,11 @@
 
 import { motion } from 'framer-motion';
 import { useStore } from '@/store/useStore';
-import { Logo, Settings, TimeOfDayIcon, LogOut } from '@/components/icons';
+import { Logo, Settings, TimeOfDayIcon, LogOut, Sun, Moon } from '@/components/icons';
 import { getTimeOfDay } from '@/lib/speechAnalysis';
 
 export function Header() {
-  const { user, isCalmingMode, toggleCalmingMode, logout } = useStore();
+  const { user, isDarkMode, toggleDarkMode, setActiveTab, logout } = useStore();
   const timeOfDay = getTimeOfDay();
   
   const getGreeting = () => {
@@ -41,24 +41,25 @@ export function Header() {
           
           <div className="flex items-center gap-2">
             <button
-              onClick={toggleCalmingMode}
+              onClick={toggleDarkMode}
               className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${
-                isCalmingMode 
-                  ? 'bg-[var(--color-calm)] text-white' 
-                  : 'bg-[var(--color-sand)] text-[var(--color-stone)] hover:bg-[var(--color-sage-light)]'
+                isDarkMode 
+                  ? 'bg-[var(--color-charcoal)] text-yellow-300' 
+                  : 'bg-[var(--color-sand)] text-[var(--color-terracotta)] hover:bg-[var(--color-sage-light)]'
               }`}
-              title={isCalmingMode ? 'Calming mode active' : 'Enable calming mode'}
+              title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             >
-              <motion.span
-                animate={{ scale: isCalmingMode ? [1, 1.1, 1] : 1 }}
-                transition={{ repeat: isCalmingMode ? Infinity : 0, duration: 2 }}
-                className="text-lg"
+              <motion.div
+                initial={false}
+                animate={{ rotate: isDarkMode ? 360 : 0 }}
+                transition={{ duration: 0.3 }}
               >
-                ✨
-              </motion.span>
+                {isDarkMode ? <Moon size={20} /> : <Sun size={20} />}
+              </motion.div>
             </button>
             
             <button 
+              onClick={() => setActiveTab('settings')}
               className="w-10 h-10 flex items-center justify-center rounded-full bg-[var(--color-sand)] text-[var(--color-stone)] hover:bg-[var(--color-sage-light)] transition-colors"
               title="Settings"
             >

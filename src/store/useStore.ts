@@ -43,8 +43,8 @@ interface AppState {
   unreadInsights: number;
   
   // UI state
-  activeTab: 'home' | 'games' | 'family' | 'insights' | 'biography' | 'timeline' | 'health';
-  isCalmingMode: boolean;
+  activeTab: 'home' | 'games' | 'family' | 'insights' | 'biography' | 'timeline' | 'health' | 'settings';
+  isDarkMode: boolean;
   
   // Biography feature
   memorySessions: MemorySession[];
@@ -67,8 +67,8 @@ interface AppState {
   addGameResult: (result: CognitiveGameResult) => void;
   addInsight: (insight: Insight) => void;
   markInsightsRead: () => void;
-  setActiveTab: (tab: 'home' | 'games' | 'family' | 'insights' | 'biography' | 'timeline' | 'health') => void;
-  toggleCalmingMode: () => void;
+  setActiveTab: (tab: 'home' | 'games' | 'family' | 'insights' | 'biography' | 'timeline' | 'health' | 'settings') => void;
+  toggleDarkMode: () => void;
   updateConversationSettings: (settings: Partial<ConversationSettings>) => void;
   addFamilyMember: (member: FamilyMember) => void;
   addFamilyMemory: (memberId: string, memory: FamilyMemory) => void;
@@ -131,7 +131,7 @@ export const useStore = create<AppState>()(
       insights: [],
       unreadInsights: 0,
       activeTab: 'home',
-      isCalmingMode: false,
+      isDarkMode: false,
       memorySessions: [],
       biography: null,
       medicalJournal: null,
@@ -357,8 +357,8 @@ export const useStore = create<AppState>()(
       
       setActiveTab: (tab) => set({ activeTab: tab }),
       
-      toggleCalmingMode: () => set((state) => ({ 
-        isCalmingMode: !state.isCalmingMode 
+      toggleDarkMode: () => set((state) => ({ 
+        isDarkMode: !state.isDarkMode 
       })),
       
       updateConversationSettings: (settings) => set((state) => ({
@@ -488,7 +488,7 @@ export const useStore = create<AppState>()(
         insights: [],
         unreadInsights: 0,
         activeTab: 'home',
-        isCalmingMode: false,
+        isDarkMode: false,
         memorySessions: [],
         biography: null,
         medicalJournal: null,

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  /* Warm, calming color palette */
+  /* Warm, calming color palette - Light Mode */
   --color-cream: #FDF8F3;
   --color-warm-white: #FEFBF6;
   --color-sage: #8BA888;
@@ -25,6 +25,29 @@
   /* Typography */
   --font-display: 'Playfair Display', serif;
   --font-body: 'Source Sans 3', sans-serif;
+}
+
+/* Dark Mode */
+.dark {
+  --color-cream: #1a1a1a;
+  --color-warm-white: #242424;
+  --color-sage: #6B9B68;
+  --color-sage-light: #4a6b48;
+  --color-sage-dark: #8BC388;
+  --color-terracotta: #D4947C;
+  --color-terracotta-light: #5a4a42;
+  --color-terracotta-dark: #E8B8A8;
+  --color-sand: #2d2d2d;
+  --color-stone: #a8a8a8;
+  --color-charcoal: #e8e8e8;
+  --color-soft-black: #f0f0f0;
+  
+  /* Semantic colors - slightly adjusted for dark mode */
+  --color-calm: #5AA595;
+  --color-happy: #D8B458;
+  --color-anxious: #C49564;
+  --color-sad: #7B8DB3;
+  --color-agitated: #B96B6B;
 }
 
 @font-face {
@@ -57,6 +80,12 @@ body {
   min-height: 100vh;
   color: var(--color-charcoal);
   line-height: 1.6;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.dark body,
+body.dark {
+  background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 50%, #252525 100%);
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -144,6 +173,11 @@ h1, h2, h3, h4, h5, h6 {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.dark .glass {
+  background: rgba(40, 40, 40, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Soft shadow */

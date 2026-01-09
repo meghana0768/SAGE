@@ -9,7 +9,6 @@ import {
   Users, User, Plus, ChevronRight, Heart, Calendar, 
   MessageCircle, Image, X 
 } from '@/components/icons';
-import { sampleFamilyMembers } from '@/lib/mockData';
 import type { FamilyMember, FamilyMemory } from '@/types';
 
 interface FamilyMemberCardProps {
@@ -302,14 +301,8 @@ export function FamilyHub() {
   const [selectedMember, setSelectedMember] = useState<FamilyMember | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   
-  // Merge sample data with user's family members
-  // Only include sample members that aren't already in user's list
-  const userMemberIds = new Set(user?.familyMembers?.map(m => m.id) || []);
-  const additionalSampleMembers = sampleFamilyMembers.filter(m => !userMemberIds.has(m.id));
-  const familyMembers = [
-    ...(user?.familyMembers || []),
-    ...additionalSampleMembers
-  ];
+  // Only use actual user family members (no hardcoded data)
+  const familyMembers = user?.familyMembers || [];
 
   const handleAddMember = (member: FamilyMember) => {
     addFamilyMember(member);
@@ -317,10 +310,6 @@ export function FamilyHub() {
   };
 
   const handleSelectMember = (member: FamilyMember) => {
-    // If using sample data and member isn't in store, add it first
-    if (!user?.familyMembers?.find(m => m.id === member.id)) {
-      addFamilyMember(member);
-    }
     setSelectedMember(member);
   };
 

@@ -270,32 +270,32 @@ function OverviewTab({ dateFilter }: { dateFilter: DateFilter }) {
       <div className="grid grid-cols-2 gap-3">
         <StatCard
           title="Language"
-          value={profile?.languageComplexity.current || 75}
-          trend={<TrendIndicator value={profile?.languageComplexity.trend || 0} />}
+          value={profile?.languageComplexity.current ?? 'N/A'}
+          trend={profile?.languageComplexity.current !== null ? <TrendIndicator value={profile?.languageComplexity.trend || 0} /> : null}
           icon={<MessageCircle size={20} className="text-[var(--color-sage)]" />}
           color="sage"
           delay={0.1}
         />
         <StatCard
           title="Memory"
-          value={profile?.memoryRecall.current || 72}
-          trend={<TrendIndicator value={profile?.memoryRecall.trend || 2} />}
+          value={profile?.memoryRecall.current ?? 'N/A'}
+          trend={profile?.memoryRecall.current !== null ? <TrendIndicator value={profile?.memoryRecall.trend || 0} /> : null}
           icon={<Brain size={20} className="text-[var(--color-terracotta)]" />}
           color="terracotta"
           delay={0.15}
         />
         <StatCard
           title="Attention"
-          value={profile?.attention.current || 78}
-          trend={<TrendIndicator value={profile?.attention.trend || 1} />}
+          value={profile?.attention.current ?? 'N/A'}
+          trend={profile?.attention.current !== null ? <TrendIndicator value={profile?.attention.trend || 0} /> : null}
           icon={<Target size={20} className="text-[var(--color-calm)]" />}
           color="calm"
           delay={0.2}
         />
         <StatCard
           title="Processing"
-          value={profile?.processingSpeed.current || 70}
-          trend={<TrendIndicator value={profile?.processingSpeed.trend || -1} />}
+          value={profile?.processingSpeed.current ?? 'N/A'}
+          trend={profile?.processingSpeed.current !== null ? <TrendIndicator value={profile?.processingSpeed.trend || 0} /> : null}
           icon={<Activity size={20} className="text-[var(--color-stone)]" />}
           delay={0.25}
         />
@@ -628,7 +628,8 @@ function LanguageTab({ dateFilter }: { dateFilter: DateFilter }) {
 }
 
 function CognitiveTab({ dateFilter }: { dateFilter: DateFilter }) {
-  const { gameResults } = useStore();
+  const { gameResults, user } = useStore();
+  const profile = user?.cognitiveProfile;
   const filteredGames = filterByDateRange(gameResults, dateFilter);
   
   // Create weekly data from actual game results
@@ -674,12 +675,12 @@ function CognitiveTab({ dateFilter }: { dateFilter: DateFilter }) {
   
   const timeOfDayData = generateTimeOfDayPerformance();
   
+  // Use actual profile data for radar chart
   const radarData = [
-    { subject: 'Language', A: 75, fullMark: 100 },
-    { subject: 'Memory', A: 72, fullMark: 100 },
-    { subject: 'Attention', A: 78, fullMark: 100 },
-    { subject: 'Processing', A: 70, fullMark: 100 },
-    { subject: 'Coherence', A: 74, fullMark: 100 },
+    { subject: 'Language', A: profile?.languageComplexity.current ?? 0, fullMark: 100 },
+    { subject: 'Memory', A: profile?.memoryRecall.current ?? 0, fullMark: 100 },
+    { subject: 'Attention', A: profile?.attention.current ?? 0, fullMark: 100 },
+    { subject: 'Processing', A: profile?.processingSpeed.current ?? 0, fullMark: 100 },
   ];
   
   return (
@@ -753,15 +754,15 @@ function CognitiveTab({ dateFilter }: { dateFilter: DateFilter }) {
       <div className="grid grid-cols-2 gap-3">
         <ProgressCard
           title="Memory Recall"
-          value={72}
+          value={profile?.memoryRecall.current ?? 0}
           color="var(--color-terracotta)"
-          subtitle="Stable this week"
+          subtitle={profile?.memoryRecall.trend ? `${profile.memoryRecall.trend > 0 ? '+' : ''}${profile.memoryRecall.trend}% this week` : 'No data yet'}
         />
         <ProgressCard
           title="Attention Focus"
-          value={78}
+          value={profile?.attention.current ?? 0}
           color="var(--color-calm)"
-          subtitle="+5% improvement"
+          subtitle={profile?.attention.trend ? `${profile.attention.trend > 0 ? '+' : ''}${profile.attention.trend}% this week` : 'No data yet'}
         />
       </div>
       

@@ -81,6 +81,7 @@ export function HealthScribe() {
       let finalTranscript = '';
       let interimTranscript = '';
 
+      // Only process new results (from resultIndex onwards)
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
@@ -90,15 +91,20 @@ export function HealthScribe() {
         }
       }
 
-      // Process with punctuation
-      const processedText = processSpeechResult(
-        finalTranscript,
-        interimTranscript,
-        transcriptBuilderRef.current
-      );
+      // Only update the builder ref with FINAL transcripts
+      if (finalTranscript.trim()) {
+        const existingText = transcriptBuilderRef.current;
+        // Add space if needed between existing and new text
+        if (existingText && !existingText.endsWith(' ')) {
+          transcriptBuilderRef.current = existingText + ' ' + finalTranscript.trim();
+        } else {
+          transcriptBuilderRef.current = existingText + finalTranscript.trim();
+        }
+      }
       
-      transcriptBuilderRef.current = processedText;
-      setCurrentTranscript(processedText);
+      // Display: finalized text + current interim (interim is temporary visual feedback)
+      const displayText = transcriptBuilderRef.current + (interimTranscript ? ' ' + interimTranscript : '');
+      setCurrentTranscript(displayText.trim());
     };
 
     recognition.onerror = (event: any) => {

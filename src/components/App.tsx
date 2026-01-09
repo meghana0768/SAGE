@@ -15,6 +15,7 @@ import { InsightsDashboard } from '@/components/features/InsightsDashboard';
 import { BiographyCapture } from '@/components/features/BiographyCapture';
 import { Timeline } from '@/components/features/Timeline';
 import { HealthScribe } from '@/components/features/HealthScribe';
+import { Settings } from '@/components/features/Settings';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function MainContent() {
@@ -44,17 +45,26 @@ function MainContent() {
         {activeTab === 'biography' && <BiographyCapture />}
         {activeTab === 'timeline' && <Timeline />}
         {activeTab === 'health' && <HealthScribe />}
+        {activeTab === 'settings' && <Settings />}
       </motion.div>
     </AnimatePresence>
   );
 }
 
 export function App() {
-  const { isAuthenticated, isOnboarded, currentUserId } = useStore();
+  const { isAuthenticated, isOnboarded, currentUserId, isDarkMode } = useStore();
   const [authView, setAuthView] = useState<'home' | 'login' | 'signup'>('home');
 
-  // No need to sync isOnboarded - login always sets it to true, signUp sets it to false
-  // The store handles this correctly now
+  // Apply dark mode class to document
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+    }
+  }, [isDarkMode]);
 
   // Save user data periodically (on state changes)
   useEffect(() => {

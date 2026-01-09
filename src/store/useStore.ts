@@ -420,6 +420,9 @@ export const useStore = create<AppState>()(
       }),
       
       addTimelineEvent: (event) => set((state) => {
+        // Helper to ensure date is a Date object (handles localStorage string serialization)
+        const toDate = (d: Date | string): Date => d instanceof Date ? d : new Date(d);
+        
         if (!state.biography) {
           const newBiography: Biography = {
             id: crypto.randomUUID(),
@@ -436,7 +439,7 @@ export const useStore = create<AppState>()(
           biography: {
             ...state.biography,
             timelineEvents: [...state.biography.timelineEvents, event].sort((a, b) => 
-              a.date.getTime() - b.date.getTime()
+              toDate(a.date).getTime() - toDate(b.date).getTime()
             ),
             lastUpdated: new Date()
           }

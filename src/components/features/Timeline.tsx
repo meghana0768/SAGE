@@ -192,11 +192,15 @@ function exportToPDF(events: TimelineEvent[], filename: string, userName: string
 export function Timeline() {
   const { biography, user } = useStore();
   
+  // Convert date strings back to Date objects (they get serialized when stored)
   const timelineEvents = useMemo(() => {
     if (!biography || !biography.timelineEvents) return [];
-    return [...biography.timelineEvents].sort((a, b) => 
-      a.date.getTime() - b.date.getTime()
-    );
+    return biography.timelineEvents
+      .map(event => ({
+        ...event,
+        date: event.date instanceof Date ? event.date : new Date(event.date)
+      }))
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [biography]);
 
   const handleExport = (format: ExportFormat) => {

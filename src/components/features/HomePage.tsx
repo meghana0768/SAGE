@@ -11,15 +11,29 @@ import {
 import { getTimeOfDay } from '@/lib/speechAnalysis';
 
 export function HomePage() {
-  const { user, setActiveTab, speechAnalyses, gameResults } = useStore();
+  const { user, setActiveTab, memorySessions, medicalJournal, gameResults } = useStore();
   const profile = user?.cognitiveProfile;
   const timeOfDay = getTimeOfDay();
   
-  const todaysSessions = speechAnalyses.filter(s => {
+  // Count conversations from Story sessions and Health entries today
+  const todaysSessions = (() => {
     const today = new Date();
-    const sessionDate = new Date(s.timestamp);
-    return sessionDate.toDateString() === today.toDateString();
-  }).length;
+    const todayStr = today.toDateString();
+    
+    // Count completed story sessions from today
+    const storyConvos = memorySessions.filter(s => {
+      const sessionDate = new Date(s.timestamp);
+      return sessionDate.toDateString() === todayStr && s.status === 'completed';
+    }).length;
+    
+    // Count health entries from today
+    const healthConvos = medicalJournal?.entries.filter(e => {
+      const entryDate = new Date(e.timestamp);
+      return entryDate.toDateString() === todayStr;
+    }).length || 0;
+    
+    return storyConvos + healthConvos;
+  })();
   
   const todaysGames = gameResults.filter(g => {
     const today = new Date();

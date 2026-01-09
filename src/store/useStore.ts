@@ -148,18 +148,12 @@ export const useStore = create<AppState>()(
           if (storedUsers[normalizedUsername] && storedUsers[normalizedUsername].password === password) {
             const userData = storedUsers[normalizedUsername];
             
-            // Load user data into state - check for isOnboarded (handle true, 'true', or any truthy value)
-            // If isOnboarded is not explicitly set, default to true (user logged in successfully, so they've completed onboarding)
-            let isOnboardedValue = true; // Default to true for existing users
-            if (userData.hasOwnProperty('isOnboarded')) {
-              isOnboardedValue = userData.isOnboarded === true || userData.isOnboarded === 'true' || userData.isOnboarded === 1;
-            }
-            
+            // For login users, always skip onboarding - only new signups need to see it
             const updatedState = {
               isAuthenticated: true, 
               currentUserId: normalizedUsername,
               user: userData.user || null,
-              isOnboarded: isOnboardedValue, // Use the checked value
+              isOnboarded: true, // Always true for login - skip onboarding for returning users
               speechAnalyses: userData.speechAnalyses || [],
               gameResults: userData.gameResults || [],
               insights: userData.insights || [],
@@ -171,13 +165,13 @@ export const useStore = create<AppState>()(
             // Set the state directly
             set(updatedState);
             
-            // Save user data to localStorage immediately - ensure isOnboarded is saved as boolean
+            // Save user data to localStorage immediately
             try {
               storedUsers[normalizedUsername] = {
                 ...storedUsers[normalizedUsername],
                 password: storedUsers[normalizedUsername].password,
                 user: updatedState.user,
-                isOnboarded: isOnboardedValue, // Save as boolean
+                isOnboarded: true, // Mark as onboarded for returning users
                 speechAnalyses: updatedState.speechAnalyses,
                 gameResults: updatedState.gameResults,
                 insights: updatedState.insights,

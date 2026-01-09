@@ -53,42 +53,8 @@ export function App() {
   const { isAuthenticated, isOnboarded, currentUserId } = useStore();
   const [authView, setAuthView] = useState<'home' | 'login' | 'signup'>('home');
 
-  // Sync isOnboarded from localStorage when authenticated - ensure it's synced immediately
-  useEffect(() => {
-    if (isAuthenticated && currentUserId) {
-      try {
-        const storedUsers = JSON.parse(localStorage.getItem('voicesense-users') || '{}');
-        const userData = storedUsers[currentUserId];
-        if (userData) {
-          // Explicitly check and set isOnboarded from stored data
-          const storedIsOnboarded = userData.isOnboarded === true || userData.isOnboarded === 'true' || userData.isOnboarded === 1;
-          const currentIsOnboarded = useStore.getState().isOnboarded;
-          
-          // If stored value says onboarded but state doesn't, fix it immediately
-          if (storedIsOnboarded && !currentIsOnboarded) {
-            useStore.setState({ isOnboarded: true });
-          }
-          // If stored value says not onboarded but state does, also sync
-          else if (!storedIsOnboarded && currentIsOnboarded) {
-            useStore.setState({ isOnboarded: false });
-          }
-        } else {
-          // If user data doesn't exist in localStorage but user is authenticated (they logged in),
-          // assume they've completed onboarding (since you can't use the app without it)
-          // Only set to true if it's currently false (to avoid overriding explicit false)
-          if (!useStore.getState().isOnboarded) {
-            useStore.setState({ isOnboarded: true });
-          }
-        }
-      } catch (e) {
-        // If localStorage is not available or there's an error, assume user has completed onboarding
-        // since they were able to log in
-        if (!useStore.getState().isOnboarded) {
-          useStore.setState({ isOnboarded: true });
-        }
-      }
-    }
-  }, [isAuthenticated, currentUserId]); // Remove isOnboarded from deps to avoid loops
+  // No need to sync isOnboarded - login always sets it to true, signUp sets it to false
+  // The store handles this correctly now
 
   // Save user data periodically (on state changes)
   useEffect(() => {

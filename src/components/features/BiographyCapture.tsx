@@ -280,11 +280,20 @@ export function BiographyCapture() {
     if (!currentSession || !finalTranscript.trim()) return;
     
     // Create the new question entry
-    const defaultQuestion = currentSession.chapter === 'travel' 
-      ? "What was it like visiting Paris and seeing the Eiffel Tower?"
-      : 'Tell me about this chapter of your life';
+    // For the first question in travel chapter, use the specific initial question
+    let questionText: string;
+    if (currentSession.chapter === 'travel' && currentSession.questions.length === 0) {
+      questionText = "What was it like visiting Paris and seeing the Eiffel Tower?";
+    } else if (currentSession.chapter === 'travel' && currentSession.questions.length === 1) {
+      // For the second question in travel chapter, also use a hardcoded question
+      questionText = "What was it like visiting Paris and seeing the Eiffel Tower?";
+    } else {
+      const defaultQuestion = 'Tell me about this chapter of your life';
+      questionText = followUpQuestions[currentQuestionIndex] || defaultQuestion;
+    }
+    
     const newQuestion = {
-      question: followUpQuestions[currentQuestionIndex] || defaultQuestion,
+      question: questionText,
       response: finalTranscript,
       timestamp: new Date()
     };
@@ -306,6 +315,12 @@ export function BiographyCapture() {
     
     // Generate empathetic follow-up questions
     const questions = generateFollowUpQuestions(currentSession.chapter, [finalTranscript]);
+    
+    // For travel chapter, override the first follow-up question if it's the second question
+    if (currentSession.chapter === 'travel' && updatedQuestions.length === 1) {
+      questions[0] = "What was it like visiting Paris and seeing the Eiffel Tower?";
+    }
+    
     setFollowUpQuestions(questions);
     
     setCurrentTranscript('');

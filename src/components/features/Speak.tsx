@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { MessageCircle, Mic, MicOff } from '@/components/icons';
 import { analyzeSpeech } from '@/lib/speechAnalysis';
 import { processSpeechResult } from '@/lib/punctuationProcessor';
-import type { SpeechAnalysis } from '@/types';
+import type { SpeechAnalysis, MemorySession } from '@/types';
 
 const SAGE_INITIAL = "How is your day going? What are your plans?";
 const SAGE_RESPONSE_1 = "That sounds like fun. What movie are you watching?";
@@ -17,7 +17,7 @@ const SAGE_RESPONSE_2 = "Home Alone is a great movie! I hope you have lots of fu
 type ConversationStep = 'initial' | 'response1' | 'response2' | 'complete';
 
 export function Speak() {
-  const { addSpeechAnalysis, setActiveTab } = useStore();
+  const { addSpeechAnalysis, setActiveTab, addMemorySession } = useStore();
   const [conversationStep, setConversationStep] = useState<ConversationStep>('initial');
   const [isRecording, setIsRecording] = useState(false);
   const [currentTranscript, setCurrentTranscript] = useState('');
@@ -133,6 +133,25 @@ export function Speak() {
 
   const handleEndConversation = () => {
     setIsRecording(false);
+    
+    // Create a memory session for this conversation to count it towards "Conversations today"
+    // Always create a session even if transcript is empty to ensure it counts
+    const transcriptText = transcriptBuilderRef.current || currentTranscript || '';
+    const speakSession: MemorySession = {
+      id: crypto.randomUUID(),
+      chapter: 'hobbies', // Use hobbies chapter type for speak sessions
+      timestamp: new Date(),
+      transcript: transcriptText.trim() || 'Speak conversation completed',
+      questions: [
+        {
+          question: SAGE_INITIAL,
+          response: transcriptText.trim() || 'Conversation completed',
+          timestamp: new Date()
+        }
+      ],
+      status: 'completed'
+    };
+    addMemorySession(speakSession);
     
     if (recognitionRef.current) {
       try {

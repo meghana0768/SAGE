@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NUCLEAR CLEAR - Remove ALL Sage Data</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 700px;
+            width: 100%;
+        }
+        h1 {
+            color: #dc3545;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            color: #856404;
+        }
+        button {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #c82333;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        #results {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { color: #28a745; font-weight: bold; }
+        .error { color: #dc3545; font-weight: bold; }
+        .info { color: #17a2b8; }
+        code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            display: block;
+            margin: 10px 0;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+        ul { margin: 10px 0; padding-left: 20px; }
+        li { margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚠️ NUCLEAR CLEAR - Remove ALL Sage Data</h1>
+        <div class="warning">
+            <strong>⚠️ WARNING:</strong> This will PERMANENTLY delete ALL accounts, data, cache, and everything related to Sage. This cannot be undone!
+        </div>
+        <button onclick="nuclearClear()">🚨 CLEAR EVERYTHING NOW 🚨</button>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        function nuclearClear() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<p class="info">🔄 Starting nuclear clear...</p>';
+            
+            const cleared = [];
+            const errors = [];
+            const remaining = [];
+            
+            try {
+                // STEP 1: Clear ALL localStorage
+                console.log('Step 1: Clearing localStorage...');
+                const localStorageKeys = [];
+                for (let i = localStorage.length - 1; i >= 0; i--) {
+                    const key = localStorage.key(i);
+                    if (key) {
+                        localStorageKeys.push(key);
+                        localStorage.removeItem(key);
+                    }
+                }
+                cleared.push(`localStorage: Cleared ${localStorageKeys.length} keys`);
+                console.log('Cleared localStorage keys:', localStorageKeys);
+                
+                // STEP 2: Clear ALL sessionStorage
+                console.log('Step 2: Clearing sessionStorage...');
+                const sessionStorageKeys = [];
+                for (let i = sessionStorage.length - 1; i >= 0; i--) {
+                    const key = sessionStorage.key(i);
+                    if (key) {
+                        sessionStorageKeys.push(key);
+                        sessionStorage.removeItem(key);
+                    }
+                }
+                cleared.push(`sessionStorage: Cleared ${sessionStorageKeys.length} keys`);
+                
+                // STEP 3: Clear IndexedDB
+                console.log('Step 3: Clearing IndexedDB...');
+                if ('indexedDB' in window) {
+                    indexedDB.databases().then(databases => {
+                        databases.forEach(db => {
+                            indexedDB.deleteDatabase(db.name);
+                            cleared.push(`IndexedDB: Deleted ${db.name}`);
+                        });
+                    }).catch(e => {
+                        errors.push(`IndexedDB error: ${e.message}`);
+                    });
+                }
+                
+                // STEP 4: Clear cookies
+                console.log('Step 4: Clearing cookies...');
+                document.cookie.split(";").forEach(cookie => {
+                    const eqPos = cookie.indexOf("=");
+                    const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+                    if (name) {
+                        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+                        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=" + window.location.hostname;
+                        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=." + window.location.hostname;
+                    }
+                });
+                cleared.push('Cookies: Cleared all');
+                
+                // STEP 5: Force clear specific keys multiple times
+                console.log('Step 5: Force clearing Sage keys...');
+                for (let i = 0; i < 10; i++) {
+                    localStorage.removeItem('sage-users');
+                    localStorage.removeItem('sage-storage');
+                    sessionStorage.removeItem('sage-users');
+                    sessionStorage.removeItem('sage-storage');
+                }
+                cleared.push('Force cleared: sage-users and sage-storage (10x)');
+                
+                // STEP 6: Verify
+                console.log('Step 6: Verifying...');
+                const checkUsers = localStorage.getItem('sage-users');
+                const checkStorage = localStorage.getItem('sage-storage');
+                
+                if (checkUsers || checkStorage) {
+                    remaining.push('sage-users or sage-storage still exists!');
+                    errors.push('FAILED to clear all data');
+                }
+                
+                // Check for any remaining sage-related keys
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && (key.toLowerCase().includes('sage') || key.toLowerCase().includes('user'))) {
+                        remaining.push(key);
+                    }
+                }
+                
+                // Display results
+                let html = '';
+                
+                if (remaining.length === 0 && !checkUsers && !checkStorage) {
+                    html += '<div class="success">✅✅✅ SUCCESS! ALL DATA COMPLETELY REMOVED! ✅✅✅</div>';
+                } else {
+                    html += '<div class="error">⚠️ Some data may still remain</div>';
+                }
+                
+                html += '<h3>Cleared Items:</h3><ul>';
+                cleared.forEach(item => {
+                    html += '<li>' + item + '</li>';
+                });
+                html += '</ul>';
+                
+                if (remaining.length > 0) {
+                    html += '<div class="error"><h3>⚠️ Remaining Keys:</h3><ul>';
+                    remaining.forEach(key => {
+                        html += '<li>' + key + '</li>';
+                    });
+                    html += '</ul></div>';
+                }
+                
+                if (errors.length > 0) {
+                    html += '<div class="error"><h3>Errors:</h3><ul>';
+                    errors.forEach(error => {
+                        html += '<li>' + error + '</li>';
+                    });
+                    html += '</ul></div>';
+                }
+                
+                html += '<div style="margin-top: 20px; padding: 15px; background: #d4edda; border-radius: 10px;">';
+                html += '<strong>Next Steps:</strong><br>';
+                html += '1. Close this tab/window<br>';
+                html += '2. Close ALL browser tabs with localhost:3000<br>';
+                html += '3. Clear browser cache (Cmd+Shift+Delete on Mac, Ctrl+Shift+Delete on Windows)<br>';
+                html += '4. Restart your browser<br>';
+                html += '5. Open localhost:3000 again<br>';
+                html += '</div>';
+                
+                results.innerHTML = html;
+                
+                // Log to console
+                console.log('✅ Nuclear clear complete!');
+                console.log('Cleared:', cleared);
+                if (remaining.length > 0) {
+                    console.warn('⚠️ Remaining:', remaining);
+                }
+                if (errors.length > 0) {
+                    console.error('❌ Errors:', errors);
+                }
+                
+                // Auto-reload after 5 seconds
+                setTimeout(() => {
+                    if (remaining.length === 0) {
+                        location.href = 'http://localhost:3000';
+                    }
+                }, 5000);
+                
+            } catch (e) {
+                results.innerHTML = '<div class="error">❌ CRITICAL ERROR: ' + e.message + '</div><p>Please manually clear browser cache and localStorage.</p>';
+                console.error('Critical error:', e);
+            }
+        }
+        
+        // Auto-run on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                if (confirm('⚠️ This will DELETE ALL Sage accounts and data. Continue?')) {
+                    nuclearClear();
+                }
+            }, 500);
+        });
+    </script>
+</body>
+</html>

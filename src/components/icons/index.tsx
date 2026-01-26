@@ -45,7 +45,10 @@ import {
   Download,
   Filter,
   LogOut,
-  Share2
+  Share2,
+  Send,
+  Check,
+  XCircle
 } from 'lucide-react';
 
 export {
@@ -93,7 +96,10 @@ export {
   Activity,
   Coffee,
   Download,
-  Filter
+  Filter,
+  Send,
+  Check,
+  XCircle
 };
 
 // Voice wave animation component

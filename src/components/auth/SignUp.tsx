@@ -42,13 +42,27 @@ export function SignUp({ onBack }: SignUpProps) {
       return;
     }
 
-    // Check if username already exists
-    const storedUsers = JSON.parse(localStorage.getItem('sage-users') || '{}');
+    // Check if username already exists - force fresh read
+    let storedUsers = {};
+    try {
+      const usersData = localStorage.getItem('sage-users');
+      if (usersData) {
+        storedUsers = JSON.parse(usersData);
+      }
+    } catch (e) {
+      console.error('Error reading users:', e);
+      storedUsers = {};
+    }
+    
     const normalizedUsername = username.trim().toLowerCase();
-    if (storedUsers[normalizedUsername]) {
-      setError('This username is already taken. Please choose another.');
-      setIsLoading(false);
-      return;
+    
+    // Double-check: if storedUsers is empty object, user doesn't exist
+    if (storedUsers && typeof storedUsers === 'object' && Object.keys(storedUsers).length > 0) {
+      if (storedUsers[normalizedUsername]) {
+        setError('This username is already taken. Please choose another.');
+        setIsLoading(false);
+        return;
+      }
     }
 
     // Attempt sign up

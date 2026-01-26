@@ -54,7 +54,7 @@ function MainContent() {
 }
 
 export function App() {
-  const { isAuthenticated, isOnboarded, currentUserId, isDarkMode, user, speechAnalyses, gameResults, insights, memorySessions, biography, medicalJournal, receivedHealthEntries, sentHealthEntries } = useStore();
+  const { isAuthenticated, isOnboarded, currentUserId, isDarkMode, user, speechAnalyses, gameResults, insights, memorySessions, biography, medicalJournal, receivedHealthEntries, sentHealthEntries, familyRequests } = useStore();
   const [authView, setAuthView] = useState<'home' | 'login' | 'signup'>('home');
 
   // Apply dark mode class to document
@@ -89,7 +89,8 @@ export function App() {
               biography: state.biography,
               medicalJournal: state.medicalJournal,
               receivedHealthEntries: state.receivedHealthEntries,
-              sentHealthEntries: state.sentHealthEntries
+              sentHealthEntries: state.sentHealthEntries,
+              familyRequests: state.familyRequests || []
             };
             localStorage.setItem('sage-users', JSON.stringify(storedUsers));
           }
@@ -102,7 +103,7 @@ export function App() {
       // Save whenever user data changes
       saveUserData();
     }
-  }, [isAuthenticated, currentUserId, user, isOnboarded, speechAnalyses, gameResults, insights, memorySessions, biography, medicalJournal, receivedHealthEntries, sentHealthEntries]);
+  }, [isAuthenticated, currentUserId, user, isOnboarded, speechAnalyses, gameResults, insights, memorySessions, biography, medicalJournal, receivedHealthEntries, sentHealthEntries, familyRequests]);
 
   // Check authentication first
   if (!isAuthenticated) {

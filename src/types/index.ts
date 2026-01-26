@@ -107,24 +107,28 @@ export interface FamilyMember {
   username?: string; // Username to connect accounts
   photoUrl?: string;
   voiceRecordingUrl?: string;
-  memories: FamilyMemory[];
-  recentUpdates: FamilyUpdate[];
+  status: 'connected' | 'pending' | 'requested'; // Connection status
+  messages: FamilyMessage[]; // Messages between family members
 }
 
-export interface FamilyMemory {
+export interface FamilyRequest {
   id: string;
-  title: string;
-  description: string;
-  date?: Date;
-  photoUrl?: string;
-  tags: string[];
+  fromUsername: string; // Username of person sending request
+  fromName: string;
+  toUsername: string; // Username of person receiving request
+  relationship: string;
+  timestamp: Date;
+  status: 'pending' | 'accepted' | 'rejected';
 }
 
-export interface FamilyUpdate {
+export interface FamilyMessage {
   id: string;
+  fromUsername: string;
+  fromName: string;
+  toUsername: string;
   content: string;
-  date: Date;
-  author: string;
+  timestamp: Date;
+  read: boolean;
 }
 
 export interface CognitiveProfile {
@@ -286,6 +290,7 @@ export interface SharedHealthEntry {
   healthEntry: HealthEntry;
   fromUsername: string;
   fromName: string;
+  toUsername?: string; // Username of recipient (for sent entries)
   timestamp: Date;
   read: boolean;
 }

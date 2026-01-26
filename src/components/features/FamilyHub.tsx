@@ -6,10 +6,9 @@ import { useStore } from '@/store/useStore';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { 
-  Users, User, Plus, ChevronRight, Heart, Calendar, 
-  MessageCircle, Image, X 
+  Users, Plus, ChevronRight, MessageCircle, X, Send, Check, XCircle
 } from '@/components/icons';
-import type { FamilyMember, FamilyMemory, SharedHealthEntry } from '@/types';
+import type { FamilyMember, FamilyRequest, FamilyMessage } from '@/types';
 
 interface FamilyMemberCardProps {
   member: FamilyMember;
@@ -18,6 +17,7 @@ interface FamilyMemberCardProps {
 
 function FamilyMemberCard({ member, onClick }: FamilyMemberCardProps) {
   const initials = member.name.split(' ').map(n => n[0]).join('').toUpperCase();
+  const unreadCount = member.messages.filter(m => !m.read).length;
   
   return (
     <Card hover onClick={onClick}>
@@ -26,14 +26,19 @@ function FamilyMemberCard({ member, onClick }: FamilyMemberCardProps) {
           {initials}
         </div>
         <div className="flex-1">
-          <h3 className="font-display font-semibold text-[var(--color-charcoal)]">
-            {member.name}
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-display font-semibold text-[var(--color-charcoal)]">
+              {member.name}
+            </h3>
+            {unreadCount > 0 && (
+              <span className="w-5 h-5 rounded-full bg-[var(--color-terracotta)] text-white text-xs flex items-center justify-center">
+                {unreadCount}
+              </span>
+            )}
+          </div>
           <p className="text-sm text-[var(--color-stone)]">{member.relationship}</p>
-          {member.memories.length > 0 && (
-            <p className="text-xs text-[var(--color-sage)] mt-1">
-              {member.memories.length} memories shared
-            </p>
+          {member.status === 'pending' && (
+            <p className="text-xs text-[var(--color-terracotta)] mt-1">Pending connection</p>
           )}
         </div>
         <ChevronRight className="text-[var(--color-stone)]" />
@@ -42,39 +47,6 @@ function FamilyMemberCard({ member, onClick }: FamilyMemberCardProps) {
   );
 }
 
-interface MemoryCardProps {
-  memory: FamilyMemory;
-}
-
-function MemoryCard({ memory }: MemoryCardProps) {
-  return (
-    <div className="p-4 bg-[var(--color-sand)] rounded-xl">
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-lg bg-[var(--color-terracotta-light)] flex items-center justify-center flex-shrink-0">
-          <Heart size={18} className="text-[var(--color-terracotta)]" />
-        </div>
-        <div>
-          <h4 className="font-medium text-[var(--color-charcoal)]">{memory.title}</h4>
-          <p className="text-sm text-[var(--color-stone)] mt-1">{memory.description}</p>
-          {memory.tags.length > 0 && (
-            <div className="flex gap-2 mt-2 flex-wrap">
-              {memory.tags.map(tag => (
-                <span 
-                  key={tag}
-                  className="text-xs px-2 py-1 bg-[var(--color-warm-white)] rounded-full text-[var(--color-stone)]"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
 interface FamilyMemberDetailProps {
   member: FamilyMember;
   onBack: () => void;
@@ -82,33 +54,26 @@ interface FamilyMemberDetailProps {
 }
 
 function FamilyMemberDetail({ member, onBack, onRemove }: FamilyMemberDetailProps) {
-  const [showAddMemory, setShowAddMemory] = useState(false);
-  const [newMemoryTitle, setNewMemoryTitle] = useState('');
-  const [newMemoryDesc, setNewMemoryDesc] = useState('');
-  const { user, addFamilyMemory } = useStore();
+  const [messageText, setMessageText] = useState('');
+  const { user, sendFamilyMessage, markFamilyMessageRead, currentUserId } = useStore();
   
-  // Get the updated member from the store to reflect changes
   const currentMember = user?.familyMembers?.find(m => m.id === member.id) || member;
-  
   const initials = currentMember.name.split(' ').map(n => n[0]).join('').toUpperCase();
+  
+  // Mark messages as read when viewing
+  const unreadMessages = currentMember.messages.filter(m => !m.read && m.fromUsername !== currentUserId);
+  unreadMessages.forEach(msg => {
+    markFamilyMessageRead(msg.id);
+  });
 
-  const handleAddMemory = () => {
-    if (!newMemoryTitle || !newMemoryDesc) return;
-    
-    addFamilyMemory(currentMember.id, {
-      id: crypto.randomUUID(),
-      title: newMemoryTitle,
-      description: newMemoryDesc,
-      tags: []
-    });
-    
-    setNewMemoryTitle('');
-    setNewMemoryDesc('');
-    setShowAddMemory(false);
+  const handleSendMessage = () => {
+    if (!messageText.trim() || !currentMember.username) return;
+    sendFamilyMessage(currentMember.username, messageText.trim());
+    setMessageText('');
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-6">
       <div className="flex items-center justify-between">
         <button 
           onClick={onBack}
@@ -141,96 +106,70 @@ function FamilyMemberDetail({ member, onBack, onRemove }: FamilyMemberDetailProp
             {currentMember.name}
           </h2>
           <p className="text-[var(--color-stone)]">{currentMember.relationship}</p>
+          {currentMember.username && (
+            <p className="text-xs text-[var(--color-sage)] mt-1">@{currentMember.username}</p>
+          )}
         </div>
       </Card>
       
-      {/* Recent updates */}
-      {currentMember.recentUpdates.length > 0 && (
-        <Card>
-          <h3 className="font-display font-semibold text-[var(--color-charcoal)] mb-3 flex items-center gap-2">
-            <MessageCircle size={18} className="text-[var(--color-sage)]" />
-            Recent Updates
-          </h3>
-          <div className="space-y-3">
-            {currentMember.recentUpdates.map(update => (
-              <div key={update.id} className="p-3 bg-[var(--color-sand)] rounded-xl">
-                <p className="text-[var(--color-charcoal)]">{update.content}</p>
-                <p className="text-xs text-[var(--color-stone)] mt-2">
-                  From {update.author} • {new Date(update.date).toLocaleDateString()}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-      
-      {/* Memories */}
+      {/* Messages */}
       <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display font-semibold text-[var(--color-charcoal)] flex items-center gap-2">
-            <Heart size={18} className="text-[var(--color-terracotta)]" />
-            Shared Memories
-          </h3>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            icon={<Plus size={16} />}
-            onClick={() => setShowAddMemory(true)}
-          >
-            Add
-          </Button>
-        </div>
+        <h3 className="font-display font-semibold text-[var(--color-charcoal)] mb-4 flex items-center gap-2">
+          <MessageCircle size={18} className="text-[var(--color-sage)]" />
+          Messages
+        </h3>
         
-        <AnimatePresence>
-          {showAddMemory && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mb-4"
-            >
-              <div className="p-4 bg-[var(--color-sand)] rounded-xl space-y-3">
-                <div className="flex justify-between items-center">
-                  <h4 className="font-medium text-[var(--color-charcoal)]">New Memory</h4>
-                  <button onClick={() => setShowAddMemory(false)}>
-                    <X size={18} className="text-[var(--color-stone)]" />
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={newMemoryTitle}
-                  onChange={(e) => setNewMemoryTitle(e.target.value)}
-                  placeholder="Memory title..."
-                  className="w-full p-3 rounded-lg border border-[var(--color-sage-light)] outline-none focus:border-[var(--color-sage)]"
-                />
-                <textarea
-                  value={newMemoryDesc}
-                  onChange={(e) => setNewMemoryDesc(e.target.value)}
-                  placeholder="Describe this memory in simple words..."
-                  className="w-full p-3 rounded-lg border border-[var(--color-sage-light)] outline-none focus:border-[var(--color-sage)] min-h-[100px] resize-none"
-                />
-                <Button 
-                  onClick={handleAddMemory} 
-                  disabled={!newMemoryTitle || !newMemoryDesc}
-                  fullWidth
+        <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
+          {currentMember.messages.length > 0 ? (
+            currentMember.messages.map(message => {
+              const isFromMe = message.fromUsername === currentUserId;
+              return (
+                <div
+                  key={message.id}
+                  className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}
                 >
-                  Save Memory
-                </Button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        
-        <div className="space-y-3">
-          {currentMember.memories.length > 0 ? (
-            currentMember.memories.map(memory => (
-              <MemoryCard key={memory.id} memory={memory} />
-            ))
+                  <div
+                    className={`max-w-[80%] p-3 rounded-xl ${
+                      isFromMe
+                        ? 'bg-[var(--color-sage)] text-white'
+                        : 'bg-[var(--color-sand)] text-[var(--color-charcoal)]'
+                    }`}
+                  >
+                    {!isFromMe && (
+                      <p className="text-xs opacity-75 mb-1">{message.fromName}</p>
+                    )}
+                    <p className="text-sm">{message.content}</p>
+                    <p className={`text-xs mt-1 ${isFromMe ? 'opacity-75' : 'text-[var(--color-stone)]'}`}>
+                      {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
           ) : (
             <p className="text-center text-[var(--color-stone)] py-6">
-              No memories shared yet. Add one to help with conversations!
+              No messages yet. Start a conversation!
             </p>
           )}
+        </div>
+        
+        {/* Message input */}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={messageText}
+            onChange={(e) => setMessageText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+            placeholder="Type a message..."
+            className="flex-1 p-3 rounded-xl border-2 border-[var(--color-sand)] focus:border-[var(--color-sage)] outline-none"
+          />
+          <Button
+            onClick={handleSendMessage}
+            disabled={!messageText.trim()}
+            icon={<Send size={18} />}
+          >
+            Send
+          </Button>
         </div>
       </Card>
     </div>
@@ -238,33 +177,28 @@ function FamilyMemberDetail({ member, onBack, onRemove }: FamilyMemberDetailProp
 }
 
 interface AddFamilyMemberFormProps {
-  onAdd: (member: FamilyMember) => void;
+  onRequest: (username: string, name: string, relationship: string) => void;
   onCancel: () => void;
 }
 
-function AddFamilyMemberForm({ onAdd, onCancel }: AddFamilyMemberFormProps) {
+function AddFamilyMemberForm({ onRequest, onCancel }: AddFamilyMemberFormProps) {
   const [name, setName] = useState('');
   const [relationship, setRelationship] = useState('');
   const [username, setUsername] = useState('');
 
   const handleSubmit = () => {
     if (!name || !relationship || !username.trim()) return;
-    
-    onAdd({
-      id: crypto.randomUUID(),
-      name,
-      relationship,
-      username: username.trim(),
-      memories: [],
-      recentUpdates: []
-    });
+    onRequest(username.trim(), name, relationship);
+    setName('');
+    setRelationship('');
+    setUsername('');
   };
 
   return (
     <Card>
       <div className="flex justify-between items-center mb-4">
         <h3 className="font-display font-semibold text-[var(--color-charcoal)]">
-          Add Family Member
+          Request Family Connection
         </h3>
         <button onClick={onCancel}>
           <X size={20} className="text-[var(--color-stone)]" />
@@ -305,7 +239,7 @@ function AddFamilyMemberForm({ onAdd, onCancel }: AddFamilyMemberFormProps) {
         
         <div>
           <label className="text-sm text-[var(--color-stone)] block mb-1">
-            Username
+            Username <span className="text-[var(--color-terracotta)]">*</span>
           </label>
           <input
             type="text"
@@ -315,7 +249,7 @@ function AddFamilyMemberForm({ onAdd, onCancel }: AddFamilyMemberFormProps) {
             className="w-full p-3 rounded-xl border-2 border-[var(--color-sand)] focus:border-[var(--color-sage)] outline-none"
           />
           <p className="text-xs text-[var(--color-stone)] mt-1">
-            Enter their username to connect accounts and enable sharing
+            Enter their username to send a connection request. They must accept to connect.
           </p>
         </div>
         
@@ -324,34 +258,75 @@ function AddFamilyMemberForm({ onAdd, onCancel }: AddFamilyMemberFormProps) {
           disabled={!name || !relationship || !username.trim()}
           fullWidth
         >
-          Add Family Member
+          Send Request
         </Button>
       </div>
     </Card>
   );
 }
 
+interface FamilyRequestCardProps {
+  request: FamilyRequest;
+  onAccept: () => void;
+  onReject: () => void;
+}
+
+function FamilyRequestCard({ request, onAccept, onReject }: FamilyRequestCardProps) {
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <h3 className="font-display font-semibold text-[var(--color-charcoal)]">
+            {request.fromName}
+          </h3>
+          <p className="text-sm text-[var(--color-stone)]">{request.relationship}</p>
+          <p className="text-xs text-[var(--color-sage)] mt-1">@{request.fromUsername}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Check size={16} />}
+            onClick={onAccept}
+          >
+            Accept
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<XCircle size={16} />}
+            onClick={onReject}
+          >
+            Reject
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function FamilyHub() {
-  const { user, addFamilyMember, removeFamilyMember, receivedHealthEntries, sentHealthEntries, markSharedHealthEntryRead, currentUserId } = useStore();
+  const { 
+    user, 
+    removeFamilyMember, 
+    requestFamilyConnection,
+    acceptFamilyRequest,
+    rejectFamilyRequest,
+    familyRequests,
+    currentUserId
+  } = useStore();
+  
   const [selectedMember, setSelectedMember] = useState<FamilyMember | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [showReceivedEntries, setShowReceivedEntries] = useState(false);
-  const [showSentEntries, setShowSentEntries] = useState(false);
+  const [showRequests, setShowRequests] = useState(false);
   
-  // Only use actual user family members (no hardcoded data)
   const familyMembers = user?.familyMembers || [];
-  const unreadReceivedEntries = receivedHealthEntries?.filter(e => !e.read) || [];
-  
-  // Get recipient names for sent entries
-  const getRecipientName = (entry: SharedHealthEntry) => {
-    if (!entry.toUsername) return 'Unknown';
-    const member = familyMembers.find(m => m.username?.toLowerCase() === entry.toUsername?.toLowerCase());
-    return member?.name || entry.toUsername;
-  };
+  const pendingRequests = familyRequests.filter(r => r.status === 'pending' && r.toUsername === currentUserId);
 
-  const handleAddMember = (member: FamilyMember) => {
-    addFamilyMember(member);
+  const handleRequestConnection = (username: string, name: string, relationship: string) => {
+    requestFamilyConnection(username, name, relationship);
     setShowAddForm(false);
+    alert('Connection request sent! They will need to accept it.');
   };
 
   const handleSelectMember = (member: FamilyMember) => {
@@ -363,87 +338,46 @@ export function FamilyHub() {
     setSelectedMember(null);
   };
 
-  // View for received health entries
-  if (showReceivedEntries) {
+  // View for family requests
+  if (showRequests) {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-2xl font-display font-bold text-[var(--color-charcoal)]">
-              Received Health Updates
+              Connection Requests
             </h2>
             <p className="text-[var(--color-stone)]">
-              Health information shared with you
+              {pendingRequests.length} pending request{pendingRequests.length !== 1 ? 's' : ''}
             </p>
           </div>
           <button
-            onClick={() => setShowReceivedEntries(false)}
+            onClick={() => setShowRequests(false)}
             className="p-2 rounded-xl hover:bg-[var(--color-sand)] transition-colors"
           >
             <ChevronRight size={24} className="text-[var(--color-stone)] rotate-180" />
           </button>
         </div>
 
-        {receivedHealthEntries.length === 0 ? (
+        {pendingRequests.length === 0 ? (
           <Card className="p-8 text-center">
-            <Heart size={48} className="text-[var(--color-sage)] mx-auto mb-4 opacity-50" />
-            <p className="text-[var(--color-stone)]">No received health updates yet</p>
+            <Users size={48} className="text-[var(--color-sage)] mx-auto mb-4 opacity-50" />
+            <p className="text-[var(--color-stone)]">No pending requests</p>
           </Card>
         ) : (
-          <div className="space-y-4">
-            {receivedHealthEntries.map((sharedEntry: SharedHealthEntry) => (
-              <Card
-                key={sharedEntry.id}
-                className={`p-6 ${!sharedEntry.read ? 'border-2 border-[var(--color-sage)]' : ''}`}
-                onClick={() => markSharedHealthEntryRead(sharedEntry.id)}
-              >
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-medium text-[var(--color-charcoal)]">
-                          From {sharedEntry.fromName}
-                        </p>
-                        {!sharedEntry.read && (
-                          <span className="w-2 h-2 rounded-full bg-[var(--color-sage)]"></span>
-                        )}
-                      </div>
-                      <p className="text-sm text-[var(--color-stone)]">
-                        {new Date(sharedEntry.timestamp).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-[var(--color-sand)]">
-                    <h4 className="font-medium text-[var(--color-charcoal)] mb-2">
-                      Primary Concern
-                    </h4>
-                    <p className="text-[var(--color-stone)] mb-4">
-                      {sharedEntry.healthEntry.primaryConcern}
-                    </p>
-
-                    {sharedEntry.healthEntry.followUpQuestions.length > 0 && (
-                      <div className="space-y-3">
-                        {sharedEntry.healthEntry.followUpQuestions.map((qa, index) => (
-                          <div key={index} className="p-3 bg-[var(--color-sand)] rounded-xl">
-                            <p className="text-sm font-medium text-[var(--color-stone)] mb-1">
-                              {qa.question}
-                            </p>
-                            <p className="text-[var(--color-charcoal)]">{qa.response}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </Card>
+          <div className="space-y-3">
+            {pendingRequests.map(request => (
+              <FamilyRequestCard
+                key={request.id}
+                request={request}
+                onAccept={() => {
+                  acceptFamilyRequest(request.id);
+                  setShowRequests(false);
+                }}
+                onReject={() => {
+                  rejectFamilyRequest(request.id);
+                }}
+              />
             ))}
           </div>
         )}
@@ -451,94 +385,7 @@ export function FamilyHub() {
     );
   }
 
-  // View for sent health entries
-  if (showSentEntries) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-2xl font-display font-bold text-[var(--color-charcoal)]">
-              Sent Health Updates
-            </h2>
-            <p className="text-[var(--color-stone)]">
-              Health information you've shared
-            </p>
-          </div>
-          <button
-            onClick={() => setShowSentEntries(false)}
-            className="p-2 rounded-xl hover:bg-[var(--color-sand)] transition-colors"
-          >
-            <ChevronRight size={24} className="text-[var(--color-stone)] rotate-180" />
-          </button>
-        </div>
-
-        {sentHealthEntries.length === 0 ? (
-          <Card className="p-8 text-center">
-            <Heart size={48} className="text-[var(--color-sage)] mx-auto mb-4 opacity-50" />
-            <p className="text-[var(--color-stone)]">No sent health updates yet</p>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {sentHealthEntries.map((sharedEntry: SharedHealthEntry) => {
-              // Find recipient by matching username
-              const recipient = familyMembers.find(m => 
-                m.username?.toLowerCase() === sharedEntry.toUsername?.toLowerCase()
-              );
-              
-              return (
-                <Card key={sharedEntry.id} className="p-6">
-                  <div className="space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-medium text-[var(--color-charcoal)] mb-1">
-                          Shared with {recipient?.name || sharedEntry.toUsername || 'Unknown'}
-                        </p>
-                        <p className="text-sm text-[var(--color-stone)]">
-                          {new Date(sharedEntry.timestamp).toLocaleDateString('en-US', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-[var(--color-sand)]">
-                      <h4 className="font-medium text-[var(--color-charcoal)] mb-2">
-                        Primary Concern
-                      </h4>
-                      <p className="text-[var(--color-stone)] mb-4">
-                        {sharedEntry.healthEntry.primaryConcern}
-                      </p>
-
-                      {sharedEntry.healthEntry.followUpQuestions.length > 0 && (
-                        <div className="space-y-3">
-                          {sharedEntry.healthEntry.followUpQuestions.map((qa, index) => (
-                            <div key={index} className="p-3 bg-[var(--color-sand)] rounded-xl">
-                              <p className="text-sm font-medium text-[var(--color-stone)] mb-1">
-                                {qa.question}
-                              </p>
-                              <p className="text-[var(--color-charcoal)]">{qa.response}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   if (selectedMember) {
-    // Get the latest member from store if it exists, otherwise use the selected one
     const latestMember = user?.familyMembers?.find(m => m.id === selectedMember.id) || selectedMember;
     return (
       <FamilyMemberDetail 
@@ -557,17 +404,28 @@ export function FamilyHub() {
             Family Hub
           </h2>
           <p className="text-[var(--color-stone)]">
-            People and memories that matter
+            Connect and message with family members
           </p>
         </div>
-        <Button 
-          variant="secondary" 
-          size="sm" 
-          icon={<Plus size={16} />}
-          onClick={() => setShowAddForm(true)}
-        >
-          Add
-        </Button>
+        <div className="flex gap-2">
+          {pendingRequests.length > 0 && (
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={() => setShowRequests(true)}
+            >
+              Requests ({pendingRequests.length})
+            </Button>
+          )}
+          <Button 
+            variant="secondary" 
+            size="sm" 
+            icon={<Plus size={16} />}
+            onClick={() => setShowAddForm(true)}
+          >
+            Add
+          </Button>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -578,7 +436,7 @@ export function FamilyHub() {
             exit={{ opacity: 0, y: -10 }}
           >
             <AddFamilyMemberForm 
-              onAdd={handleAddMember}
+              onRequest={handleRequestConnection}
               onCancel={() => setShowAddForm(false)}
             />
           </motion.div>
@@ -589,8 +447,8 @@ export function FamilyHub() {
         {familyMembers.map(member => (
           <FamilyMemberCard
             key={member.id}
-            member={member as FamilyMember}
-            onClick={() => handleSelectMember(member as FamilyMember)}
+            member={member}
+            onClick={() => handleSelectMember(member)}
           />
         ))}
       </div>
@@ -602,14 +460,13 @@ export function FamilyHub() {
             No family members yet
           </h3>
           <p className="text-[var(--color-stone)] mb-4">
-            Add family members to personalize conversations and share memories.
+            Send connection requests to family members to start messaging.
           </p>
           <Button onClick={() => setShowAddForm(true)} icon={<Plus size={18} />}>
-            Add Family Member
+            Request Connection
           </Button>
         </Card>
       )}
     </div>
   );
 }
-

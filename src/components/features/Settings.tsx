@@ -15,7 +15,7 @@ export function Settings() {
     isDarkMode, 
     toggleDarkMode, 
     updateConversationSettings,
-    logout 
+    logout
   } = useStore();
   
   const [showAbout, setShowAbout] = useState(false);
@@ -257,3 +257,4 @@ export function Settings() {
   );
 }
 
+export default Settings;

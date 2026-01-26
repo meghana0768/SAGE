@@ -7,7 +7,8 @@ import type {
   Insight,
   EmotionalState,
   FamilyMember,
-  FamilyMemory,
+  FamilyRequest,
+  FamilyMessage,
   ConversationSettings,
   MemorySession,
   Biography,
@@ -57,6 +58,9 @@ interface AppState {
   receivedHealthEntries: SharedHealthEntry[];
   sentHealthEntries: SharedHealthEntry[];
   
+  // Family requests
+  familyRequests: FamilyRequest[];
+  
   // Actions
   login: (username: string, password: string) => boolean;
   signUp: (username: string, password: string) => boolean;
@@ -73,9 +77,12 @@ interface AppState {
   setActiveTab: (tab: 'home' | 'games' | 'family' | 'insights' | 'biography' | 'timeline' | 'health' | 'settings' | 'speak') => void;
   toggleDarkMode: () => void;
   updateConversationSettings: (settings: Partial<ConversationSettings>) => void;
-  addFamilyMember: (member: FamilyMember) => void;
+  requestFamilyConnection: (username: string, name: string, relationship: string) => void;
+  acceptFamilyRequest: (requestId: string) => void;
+  rejectFamilyRequest: (requestId: string) => void;
   removeFamilyMember: (memberId: string) => void;
-  addFamilyMemory: (memberId: string, memory: FamilyMemory) => void;
+  sendFamilyMessage: (toUsername: string, content: string) => void;
+  markFamilyMessageRead: (messageId: string) => void;
   // Biography actions
   addMemorySession: (session: MemorySession) => void;
   updateMemorySession: (sessionId: string, updates: Partial<MemorySession>) => void;
@@ -89,6 +96,7 @@ interface AppState {
   shareHealthEntryToFamily: (entry: HealthEntry, memberUsername: string) => void;
   markSharedHealthEntryRead: (entryId: string) => void;
   reset: () => void;
+  clearAllAccounts: () => void;
 }
 
 const generateInitialUser = (username: string): User => ({
@@ -142,6 +150,9 @@ export const useStore = create<AppState>()(
       biography: null,
       medicalJournal: null,
       isHealthMode: false,
+      receivedHealthEntries: [],
+      sentHealthEntries: [],
+      familyRequests: [],
 
       // Actions
       login: (username, password) => {
@@ -150,16 +161,108 @@ export const useStore = create<AppState>()(
           const storedUsers = JSON.parse(localStorage.getItem('sage-users') || '{}');
           const normalizedUsername = username.trim().toLowerCase();
           
+          // Validate input
+          if (!normalizedUsername || !password) {
+            return false;
+          }
+          
           // Check if user exists and password matches
           if (storedUsers[normalizedUsername] && storedUsers[normalizedUsername].password === password) {
             const userData = storedUsers[normalizedUsername];
+            
+            // If user data is missing or invalid, repair it
+            if (!userData || !userData.user || typeof userData.user !== 'object') {
+              console.warn('User data missing or invalid for:', normalizedUsername, '- repairing...');
+              
+              // Create a new user object with the username (use original username for display if available)
+              const displayName = userData?.user?.name || normalizedUsername;
+              const repairedUser = generateInitialUser(displayName);
+              
+              // Repair the user data
+              storedUsers[normalizedUsername] = {
+                password: userData?.password || password,
+                user: repairedUser,
+                isOnboarded: userData?.isOnboarded !== undefined ? userData.isOnboarded : true,
+                speechAnalyses: userData?.speechAnalyses || [],
+                gameResults: userData?.gameResults || [],
+                insights: userData?.insights || [],
+                memorySessions: userData?.memorySessions || [],
+                biography: userData?.biography || null,
+                medicalJournal: userData?.medicalJournal || null,
+                receivedHealthEntries: userData?.receivedHealthEntries || [],
+                sentHealthEntries: userData?.sentHealthEntries || [],
+                familyRequests: userData?.familyRequests || []
+              };
+              
+              // Save repaired data
+              localStorage.setItem('sage-users', JSON.stringify(storedUsers));
+              
+              // Use the repaired data
+              const repairedData = storedUsers[normalizedUsername];
+              
+              // Clear any stale persist data first
+              try {
+                const persistData = JSON.parse(localStorage.getItem('sage-storage') || '{}');
+                if (persistData.state && persistData.state.currentUserId !== normalizedUsername) {
+                  // Clear stale data
+                  localStorage.setItem('sage-storage', JSON.stringify({
+                    state: {
+                      isAuthenticated: false,
+                      currentUserId: null,
+                      isOnboarded: false
+                    }
+                  }));
+                }
+              } catch (e) {
+                // Ignore errors clearing persist data
+              }
+              
+              // Set state with repaired data
+              const updatedState = {
+                isAuthenticated: true, 
+                currentUserId: normalizedUsername,
+                user: repairedData.user,
+                isOnboarded: repairedData.isOnboarded !== undefined ? repairedData.isOnboarded : true,
+                speechAnalyses: repairedData.speechAnalyses || [],
+                gameResults: repairedData.gameResults || [],
+                insights: repairedData.insights || [],
+                memorySessions: repairedData.memorySessions || [],
+                biography: repairedData.biography || null,
+                medicalJournal: repairedData.medicalJournal || null,
+                receivedHealthEntries: repairedData.receivedHealthEntries || [],
+                sentHealthEntries: repairedData.sentHealthEntries || [],
+                familyRequests: repairedData.familyRequests || []
+              };
+              
+              set(updatedState);
+              return true;
+            }
+            
+            // User data is valid, proceed with normal login
+            
+            // Clear any stale persist data first
+            try {
+              const persistData = JSON.parse(localStorage.getItem('sage-storage') || '{}');
+              if (persistData.state && persistData.state.currentUserId !== normalizedUsername) {
+                // Clear stale data
+                localStorage.setItem('sage-storage', JSON.stringify({
+                  state: {
+                    isAuthenticated: false,
+                    currentUserId: null,
+                    isOnboarded: false
+                  }
+                }));
+              }
+            } catch (e) {
+              // Ignore errors clearing persist data
+            }
             
             // For login users, always skip onboarding - only new signups need to see it
             const updatedState = {
               isAuthenticated: true, 
               currentUserId: normalizedUsername,
-              user: userData.user || null,
-              isOnboarded: userData.isOnboarded !== undefined ? userData.isOnboarded : true, // Use stored isOnboarded or default to true
+              user: userData.user,
+              isOnboarded: userData.isOnboarded !== undefined ? userData.isOnboarded : true,
               speechAnalyses: userData.speechAnalyses || [],
               gameResults: userData.gameResults || [],
               insights: userData.insights || [],
@@ -167,19 +270,20 @@ export const useStore = create<AppState>()(
               biography: userData.biography || null,
               medicalJournal: userData.medicalJournal || null,
               receivedHealthEntries: userData.receivedHealthEntries || [],
-              sentHealthEntries: userData.sentHealthEntries || []
+              sentHealthEntries: userData.sentHealthEntries || [],
+              familyRequests: userData.familyRequests || []
             };
             
             // Set the state directly - this will also update persist storage
             set(updatedState);
             
-            // Save user data to localStorage immediately
+            // Save user data to localStorage immediately to ensure consistency
             try {
               storedUsers[normalizedUsername] = {
                 ...storedUsers[normalizedUsername],
                 password: storedUsers[normalizedUsername].password,
                 user: updatedState.user,
-                isOnboarded: true, // Mark as onboarded for returning users
+                isOnboarded: updatedState.isOnboarded,
                 speechAnalyses: updatedState.speechAnalyses,
                 gameResults: updatedState.gameResults,
                 insights: updatedState.insights,
@@ -187,7 +291,8 @@ export const useStore = create<AppState>()(
                 biography: updatedState.biography,
                 medicalJournal: updatedState.medicalJournal,
                 receivedHealthEntries: updatedState.receivedHealthEntries,
-                sentHealthEntries: updatedState.sentHealthEntries
+                sentHealthEntries: updatedState.sentHealthEntries,
+                familyRequests: updatedState.familyRequests
               };
               localStorage.setItem('sage-users', JSON.stringify(storedUsers));
             } catch (e) {
@@ -199,7 +304,7 @@ export const useStore = create<AppState>()(
           }
         } catch (e) {
           // localStorage not available or error parsing
-          console.warn('localStorage error during login:', e);
+          console.error('localStorage error during login:', e);
         }
         
         // User doesn't exist or password doesn't match
@@ -208,16 +313,59 @@ export const useStore = create<AppState>()(
       
       signUp: (username, password) => {
         // Sign up only - creates new account
-        const storedUsers = JSON.parse(localStorage.getItem('sage-users') || '{}');
+        try {
+          // Force fresh read from localStorage - don't trust any cached data
+          let storedUsers: Record<string, any> = {};
+          try {
+            const usersData = localStorage.getItem('sage-users');
+            console.log('SignUp - Raw localStorage data:', usersData);
+            
+            if (usersData && usersData.trim() !== '' && usersData !== '{}' && usersData !== 'null') {
+              storedUsers = JSON.parse(usersData);
+            } else {
+              storedUsers = {};
+            }
+          } catch (e) {
+            console.warn('Error parsing sage-users, treating as empty:', e);
+            storedUsers = {};
+          }
+          
         const normalizedUsername = username.trim().toLowerCase();
         
-        // Check if username already exists
+          // Validate input
+          if (!normalizedUsername || !password) {
+            console.warn('SignUp - Invalid input');
+            return false;
+          }
+          
+          // Debug logging
+          console.log('SignUp - Checking username:', normalizedUsername);
+          console.log('SignUp - Stored users keys:', Object.keys(storedUsers));
+          console.log('SignUp - User exists?', !!storedUsers[normalizedUsername]);
+          
+          // Check if username already exists - only if we have actual data
+          if (storedUsers && typeof storedUsers === 'object' && Object.keys(storedUsers).length > 0) {
         if (storedUsers[normalizedUsername]) {
+              console.error('SignUp - Username already exists:', normalizedUsername);
           return false; // Username already taken
-        }
-        
-        // Create new account
-        const newUser = generateInitialUser(normalizedUsername);
+            }
+          }
+          
+          // Clear any stale persist data
+          try {
+            localStorage.setItem('sage-storage', JSON.stringify({
+              state: {
+                isAuthenticated: false,
+                currentUserId: null,
+                isOnboarded: false
+              }
+            }));
+          } catch (e) {
+            // Ignore errors
+          }
+          
+          // Create new account with the actual username provided (not normalized for display)
+          const newUser = generateInitialUser(username.trim()); // Use original username for display
         storedUsers[normalizedUsername] = {
           password: password,
           user: newUser,
@@ -227,20 +375,34 @@ export const useStore = create<AppState>()(
           insights: [],
           memorySessions: [],
           biography: null,
-          medicalJournal: null,
-          receivedHealthEntries: [],
-          sentHealthEntries: []
+            medicalJournal: null,
+            receivedHealthEntries: [],
+            sentHealthEntries: [],
+            familyRequests: []
         };
-        localStorage.setItem('sage-users', JSON.stringify(storedUsers));
+          localStorage.setItem('sage-users', JSON.stringify(storedUsers));
+          
         set({ 
           isAuthenticated: true, 
           currentUserId: normalizedUsername,
           user: newUser,
-          isOnboarded: false,
-          receivedHealthEntries: [],
-          sentHealthEntries: []
+            isOnboarded: false,
+            speechAnalyses: [],
+            gameResults: [],
+            insights: [],
+            memorySessions: [],
+            biography: null,
+            medicalJournal: null,
+            isHealthMode: false,
+            receivedHealthEntries: [],
+            sentHealthEntries: [],
+            familyRequests: []
         });
         return true;
+        } catch (e) {
+          console.error('Error during signup:', e);
+          return false;
+        }
       },
       
       logout: () => set((state) => {
@@ -275,7 +437,6 @@ export const useStore = create<AppState>()(
           insights: [],
           unreadInsights: 0,
           activeTab: 'home',
-          isCalmingMode: false,
           memorySessions: [],
           biography: null,
           medicalJournal: null,
@@ -382,23 +543,187 @@ export const useStore = create<AppState>()(
         } : null
       })),
       
-      addFamilyMember: (member) => set((state) => ({
+      requestFamilyConnection: (username, name, relationship) => {
+        const state = useStore.getState();
+        if (!state.currentUserId || !state.user) return;
+        
+        const normalizedUsername = username.trim().toLowerCase();
+        const storedUsers = JSON.parse(localStorage.getItem('sage-users') || '{}');
+        
+        // Check if user exists
+        if (!storedUsers[normalizedUsername]) {
+          alert('User not found. Please check the username.');
+          return;
+        }
+        
+        // Create request
+        const request: FamilyRequest = {
+          id: crypto.randomUUID(),
+          fromUsername: state.currentUserId,
+          fromName: state.user.name,
+          toUsername: normalizedUsername,
+          relationship,
+          timestamp: new Date(),
+          status: 'pending'
+        };
+        
+        // Add to current user's requests (outgoing)
+        set((state) => ({
+          familyRequests: [...state.familyRequests, request]
+        }));
+        
+        // Save to target user's localStorage
+        const targetUserData = storedUsers[normalizedUsername];
+        const targetRequests = targetUserData.familyRequests || [];
+        targetRequests.push(request);
+        storedUsers[normalizedUsername] = {
+          ...targetUserData,
+          familyRequests: targetRequests
+        };
+        localStorage.setItem('sage-users', JSON.stringify(storedUsers));
+        
+        // If target user is currently logged in, update their state
+        if (normalizedUsername === state.currentUserId) {
+          set({ familyRequests: [...state.familyRequests, request] });
+        }
+      },
+      
+      acceptFamilyRequest: (requestId) => {
+        const state = useStore.getState();
+        if (!state.currentUserId || !state.user) return;
+        
+        const request = state.familyRequests.find(r => r.id === requestId && r.status === 'pending');
+        if (!request) return;
+        
+        const storedUsers = JSON.parse(localStorage.getItem('sage-users') || '{}');
+        const fromUserData = storedUsers[request.fromUsername];
+        
+        if (!fromUserData) return;
+        
+        // Create family member for current user
+        const newMember: FamilyMember = {
+          id: crypto.randomUUID(),
+          name: request.fromName,
+          relationship: request.relationship,
+          username: request.fromUsername,
+          status: 'connected',
+          messages: []
+        };
+        
+        // Create family member for the requester
+        const requesterMember: FamilyMember = {
+          id: crypto.randomUUID(),
+          name: state.user.name,
+          relationship: request.relationship,
+          username: state.currentUserId,
+          status: 'connected',
+          messages: []
+        };
+        
+        // Update current user
+        set((state) => ({
+          user: state.user ? {
+            ...state.user,
+            familyMembers: [...state.user.familyMembers, newMember]
+          } : null,
+          familyRequests: state.familyRequests.map(r => 
+            r.id === requestId ? { ...r, status: 'accepted' } : r
+          )
+        }));
+        
+        // Update requester's data
+        fromUserData.user = {
+          ...fromUserData.user,
+          familyMembers: [...(fromUserData.user?.familyMembers || []), requesterMember]
+        };
+        fromUserData.familyRequests = (fromUserData.familyRequests || []).map((r: FamilyRequest) =>
+          r.id === requestId ? { ...r, status: 'accepted' } : r
+        );
+        storedUsers[request.fromUsername] = fromUserData;
+        localStorage.setItem('sage-users', JSON.stringify(storedUsers));
+      },
+      
+      rejectFamilyRequest: (requestId) => {
+        set((state) => ({
+          familyRequests: state.familyRequests.map(r => 
+            r.id === requestId ? { ...r, status: 'rejected' } : r
+          )
+        }));
+      },
+      
+      removeFamilyMember: (memberId) => {
+        set((state) => ({
         user: state.user ? {
           ...state.user,
-          familyMembers: [...state.user.familyMembers, member]
+            familyMembers: state.user.familyMembers.filter(m => m.id !== memberId)
         } : null
-      })),
+        }));
+        
+        // Also save to localStorage
+        const stateAfter = useStore.getState();
+        if (stateAfter.currentUserId) {
+          const storedUsers = JSON.parse(localStorage.getItem('sage-users') || '{}');
+          if (storedUsers[stateAfter.currentUserId]) {
+            storedUsers[stateAfter.currentUserId].user = stateAfter.user;
+            localStorage.setItem('sage-users', JSON.stringify(storedUsers));
+          }
+        }
+      },
       
-      addFamilyMemory: (memberId, memory) => set((state) => ({
+      sendFamilyMessage: (toUsername, content) => {
+        const state = useStore.getState();
+        if (!state.currentUserId || !state.user) return;
+        
+        const normalizedToUsername = toUsername.trim().toLowerCase();
+        const message: FamilyMessage = {
+          id: crypto.randomUUID(),
+          fromUsername: state.currentUserId,
+          fromName: state.user.name,
+          toUsername: normalizedToUsername,
+          content,
+          timestamp: new Date(),
+          read: false
+        };
+        
+        // Add to current user's family member messages
+        set((state) => ({
         user: state.user ? {
           ...state.user,
           familyMembers: state.user.familyMembers.map(m => 
-            m.id === memberId 
-              ? { ...m, memories: [...m.memories, memory] }
+              m.username?.toLowerCase() === normalizedToUsername
+                ? { ...m, messages: [...m.messages, message] }
               : m
           )
         } : null
-      })),
+        }));
+        
+        // Save to target user's localStorage
+        const storedUsers = JSON.parse(localStorage.getItem('sage-users') || '{}');
+        const targetUserData = storedUsers[normalizedToUsername];
+        if (targetUserData && targetUserData.user) {
+          targetUserData.user.familyMembers = targetUserData.user.familyMembers.map((m: FamilyMember) =>
+            m.username?.toLowerCase() === state.currentUserId?.toLowerCase()
+              ? { ...m, messages: [...m.messages, message] }
+              : m
+          );
+          storedUsers[normalizedToUsername] = targetUserData;
+          localStorage.setItem('sage-users', JSON.stringify(storedUsers));
+        }
+      },
+      
+      markFamilyMessageRead: (messageId) => {
+        set((state) => ({
+          user: state.user ? {
+            ...state.user,
+            familyMembers: state.user.familyMembers.map(m => ({
+              ...m,
+              messages: m.messages.map(msg =>
+                msg.id === messageId ? { ...msg, read: true } : msg
+              )
+            }))
+          } : null
+        }));
+      },
       
       // Biography actions
       addMemorySession: (session) => set((state) => ({
@@ -594,7 +919,143 @@ export const useStore = create<AppState>()(
         medicalJournal: null,
         isHealthMode: false,
         receivedHealthEntries: []
-      })
+      }),
+      
+      clearAllAccounts: () => {
+        // NUCLEAR CLEAR - Remove everything
+        try {
+          console.log('🚨 Starting NUCLEAR CLEAR...');
+          
+          // Step 1: Clear all localStorage keys
+          const keysToRemove = [];
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (key) {
+              keysToRemove.push(key);
+              localStorage.removeItem(key);
+            }
+          }
+          console.log('Step 1: Cleared', keysToRemove.length, 'localStorage keys');
+          
+          // Step 2: Clear all sessionStorage
+          const sessionKeys = [];
+          for (let i = sessionStorage.length - 1; i >= 0; i--) {
+            const key = sessionStorage.key(i);
+            if (key) {
+              sessionKeys.push(key);
+              sessionStorage.removeItem(key);
+            }
+          }
+          console.log('Step 2: Cleared', sessionKeys.length, 'sessionStorage keys');
+          
+          // Step 3: Force remove sage keys 50 times (very aggressive)
+          for (let i = 0; i < 50; i++) {
+            localStorage.removeItem('sage-users');
+            localStorage.removeItem('sage-storage');
+            sessionStorage.removeItem('sage-users');
+            sessionStorage.removeItem('sage-storage');
+          }
+          console.log('Step 3: Force removed sage keys 50 times');
+          
+          // Step 4: Use clear() method as backup
+          try {
+            localStorage.clear();
+            sessionStorage.clear();
+            console.log('Step 4: Used clear() method');
+          } catch (e) {
+            console.warn('clear() method failed:', e);
+          }
+          
+          // Step 5: Final verification
+          const finalCheck1 = localStorage.getItem('sage-users');
+          const finalCheck2 = localStorage.getItem('sage-storage');
+          const finalCheck3 = sessionStorage.getItem('sage-users');
+          const finalCheck4 = sessionStorage.getItem('sage-storage');
+          
+          console.log('Final verification:');
+          console.log('  sage-users in localStorage:', !!finalCheck1);
+          console.log('  sage-storage in localStorage:', !!finalCheck2);
+          console.log('  sage-users in sessionStorage:', !!finalCheck3);
+          console.log('  sage-storage in sessionStorage:', !!finalCheck4);
+          console.log('  All localStorage keys:', Object.keys(localStorage));
+          console.log('  All sessionStorage keys:', Object.keys(sessionStorage));
+          
+          if (!finalCheck1 && !finalCheck2 && !finalCheck3 && !finalCheck4) {
+            console.log('✅✅✅ NUCLEAR CLEAR SUCCESSFUL! ✅✅✅');
+          } else {
+            console.error('❌❌❌ WARNING: Data still exists after clearing!');
+            console.error('This may be a browser caching issue. Please:');
+            console.error('1. Close ALL browser tabs');
+            console.error('2. Clear browser cache (Cmd+Shift+Delete)');
+            console.error('3. Restart browser');
+          }
+          
+          console.log('✅ NUCLEAR CLEAR complete');
+        } catch (e) {
+          console.error('Error clearing accounts:', e);
+        }
+        
+        // Reset state
+        set({
+          isAuthenticated: false,
+          currentUserId: null,
+          user: null,
+          isOnboarded: false,
+          isRecording: false,
+          currentTranscript: '',
+          currentEmotionalState: 'neutral',
+          speechAnalyses: [],
+          gameResults: [],
+          insights: [],
+          unreadInsights: 0,
+          activeTab: 'home',
+          isDarkMode: false,
+          memorySessions: [],
+          biography: null,
+          medicalJournal: null,
+          isHealthMode: false,
+          receivedHealthEntries: [],
+          sentHealthEntries: [],
+          familyRequests: []
+        });
+      },
+      
+      debugStorage: () => {
+        // Debug function to see what's actually in storage
+        console.log('=== STORAGE DEBUG ===');
+        console.log('localStorage length:', localStorage.length);
+        console.log('sessionStorage length:', sessionStorage.length);
+        
+        const allLocalKeys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key) {
+            allLocalKeys.push(key);
+            if (key.includes('sage') || key.includes('user')) {
+              console.log('Found key:', key, '=', localStorage.getItem(key)?.substring(0, 100));
+            }
+          }
+        }
+        console.log('All localStorage keys:', allLocalKeys);
+        
+        const sageUsers = localStorage.getItem('sage-users');
+        const sageStorage = localStorage.getItem('sage-storage');
+        
+        console.log('sage-users exists?', !!sageUsers);
+        console.log('sage-storage exists?', !!sageStorage);
+        
+        if (sageUsers) {
+          try {
+            const parsed = JSON.parse(sageUsers);
+            console.log('sage-users content:', Object.keys(parsed));
+            console.log('sage-users full:', parsed);
+          } catch (e) {
+            console.error('Error parsing sage-users:', e);
+          }
+        }
+        
+        console.log('=== END DEBUG ===');
+      }
     }),
     {
       name: 'sage-storage',
@@ -607,26 +1068,103 @@ export const useStore = create<AppState>()(
       }),
       onRehydrateStorage: () => (state) => {
         // After rehydration, if user is authenticated, load their actual data from sage-users
-        // This ensures we use the correct isOnboarded status
+        // This ensures we use the correct user data and prevents stale data issues
         if (state?.isAuthenticated && state.currentUserId) {
-          const storedUsers = JSON.parse(localStorage.getItem('sage-users') || '{}');
-          const userData = storedUsers[state.currentUserId];
-          if (userData) {
+          try {
+            const storedUsers = JSON.parse(localStorage.getItem('sage-users') || '{}');
+            const normalizedUserId = state.currentUserId.trim().toLowerCase();
+            const userData = storedUsers[normalizedUserId];
+            
+            // Validate user exists and has valid data
+            if (userData && userData.user && typeof userData.user === 'object') {
             // Override rehydrated state with actual user data from storage
-            // Always use userData from localStorage, never from rehydrated state
+              // Always use userData from localStorage, never from rehydrated state
+              useStore.setState({
+                currentUserId: normalizedUserId, // Ensure normalized
+                user: userData.user,
+                isOnboarded: userData.isOnboarded !== undefined ? userData.isOnboarded : true,
+                speechAnalyses: userData.speechAnalyses || [],
+                gameResults: userData.gameResults || [],
+                insights: userData.insights || [],
+                memorySessions: userData.memorySessions || [],
+                biography: userData.biography || null,
+                medicalJournal: userData.medicalJournal || null,
+                receivedHealthEntries: userData.receivedHealthEntries || [],
+                sentHealthEntries: userData.sentHealthEntries || [],
+                familyRequests: userData.familyRequests || []
+              });
+            } else {
+              // User data doesn't exist or is corrupted - repair it or clear authentication
+              if (userData && userData.password) {
+                // User exists but data is corrupted - repair it
+                console.warn('User data corrupted for:', normalizedUserId, '- repairing...');
+                const displayName = userData?.user?.name || normalizedUserId;
+                const repairedUser = generateInitialUser(displayName);
+                
+                const repairedData = {
+                  ...userData,
+                  user: repairedUser,
+                  isOnboarded: userData.isOnboarded !== undefined ? userData.isOnboarded : true,
+                  speechAnalyses: userData.speechAnalyses || [],
+                  gameResults: userData.gameResults || [],
+                  insights: userData.insights || [],
+                  memorySessions: userData.memorySessions || [],
+                  biography: userData.biography || null,
+                  medicalJournal: userData.medicalJournal || null,
+                  receivedHealthEntries: userData.receivedHealthEntries || [],
+                  sentHealthEntries: userData.sentHealthEntries || [],
+                  familyRequests: userData.familyRequests || []
+                };
+                
+                // Save repaired data
+                const storedUsers = JSON.parse(localStorage.getItem('sage-users') || '{}');
+                storedUsers[normalizedUserId] = repairedData;
+                localStorage.setItem('sage-users', JSON.stringify(storedUsers));
+                
+                // Set state with repaired data
+                useStore.setState({
+                  currentUserId: normalizedUserId,
+                  user: repairedUser,
+                  isOnboarded: repairedData.isOnboarded,
+                  speechAnalyses: repairedData.speechAnalyses,
+                  gameResults: repairedData.gameResults,
+                  insights: repairedData.insights,
+                  memorySessions: repairedData.memorySessions,
+                  biography: repairedData.biography,
+                  medicalJournal: repairedData.medicalJournal,
+                  receivedHealthEntries: repairedData.receivedHealthEntries,
+                  sentHealthEntries: repairedData.sentHealthEntries,
+                  familyRequests: repairedData.familyRequests
+                });
+              } else {
+                // User doesn't exist - clear authentication
+                console.warn('User data not found for:', normalizedUserId, '- clearing authentication');
+                useStore.setState({
+                  isAuthenticated: false,
+                  currentUserId: null,
+                  user: null,
+                  isOnboarded: false
+                });
+              }
+            }
+          } catch (e) {
+            console.error('Error during rehydration:', e);
+            // On error, clear authentication to prevent invalid state
             useStore.setState({
-              user: userData.user || null,
-              isOnboarded: userData.isOnboarded === true ? true : false,
-              speechAnalyses: userData.speechAnalyses || [],
-              gameResults: userData.gameResults || [],
-              insights: userData.insights || [],
-              memorySessions: userData.memorySessions || [],
-              biography: userData.biography || null,
-              medicalJournal: userData.medicalJournal || null,
-              receivedHealthEntries: userData.receivedHealthEntries || [],
-              sentHealthEntries: userData.sentHealthEntries || []
+              isAuthenticated: false,
+              currentUserId: null,
+              user: null,
+              isOnboarded: false
             });
           }
+        } else {
+          // Not authenticated - ensure clean state
+          useStore.setState({
+            isAuthenticated: false,
+            currentUserId: null,
+            user: null,
+            isOnboarded: false
+          });
         }
       }
     }

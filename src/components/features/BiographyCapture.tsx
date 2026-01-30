@@ -348,10 +348,7 @@ export function BiographyCapture() {
     setSelectedChapter(null);
     setCurrentTranscript('');
     setFollowUpQuestions([]);
-    setPendingDatePrompt(null);
   }, [currentSession, addBiographyEntry, updateMemorySession]);
-    setFollowUpQuestions([]);
-  }, [currentSession, updateMemorySession]);
 
   const getChapterIcon = (chapter: LifeChapter) => {
     return lifeChapters.find(c => c.value === chapter)?.icon || '📖';

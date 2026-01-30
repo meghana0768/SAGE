@@ -97,6 +97,7 @@ interface AppState {
   sendFamilyMessage: (toUsername: string, content: string) => void;
   markFamilyMessageRead: (messageId: string) => void;
   updateFamilyMemberMessages: (username: string, messages: FamilyMessage[]) => void;
+  loadFamilyData: () => Promise<void>;
   // Talk actions
   addTalkSession: (session: TalkSession) => void;
   addHealthCard: (card: HealthCard) => void;
@@ -1428,8 +1429,8 @@ export const useStore = create<AppState>()(
             lastUpdated: new Date(),
             isComplete: false,
           };
-          return {
-            biography: {
+        return {
+          biography: {
               ...currentBiography,
               entries: [...currentBiography.entries, entry],
               lastUpdated: new Date(),
@@ -1533,18 +1534,18 @@ export const useStore = create<AppState>()(
         
         // Reset state
         set({
-          isAuthenticated: false,
-          currentUserId: null,
-          user: null,
-          isRecording: false,
-          currentTranscript: '',
-          currentEmotionalState: 'neutral',
-          speechAnalyses: [],
-          gameResults: [],
-          insights: [],
-          unreadInsights: 0,
-          activeTab: 'home',
-          isDarkMode: false,
+        isAuthenticated: false,
+        currentUserId: null,
+        user: null,
+        isRecording: false,
+        currentTranscript: '',
+        currentEmotionalState: 'neutral',
+        speechAnalyses: [],
+        gameResults: [],
+        insights: [],
+        unreadInsights: 0,
+        activeTab: 'home',
+        isDarkMode: false,
           talkSessions: [],
           healthCards: [],
           familyRequests: [],

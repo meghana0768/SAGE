@@ -43,9 +43,9 @@ function FamilyMemberCard({ member, onClick }: FamilyMemberCardProps) {
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="font-display font-semibold text-[var(--color-charcoal)]">
+          <h3 className="font-display font-semibold text-[var(--color-charcoal)]">
               {capitalizeWords(member.name)}
-            </h3>
+          </h3>
             {unreadCount > 0 && (
               <span className="w-5 h-5 rounded-full bg-[var(--color-terracotta)] text-white text-xs flex items-center justify-center">
                 {unreadCount}
@@ -82,7 +82,7 @@ function FamilyMemberDetail({ member, onBack, onRemove }: FamilyMemberDetailProp
   // Get messages from the current member (will update when store updates)
   const messages = currentMember.messages || [];
   const initials = currentMember.name.split(' ').map(n => n[0]).join('').toUpperCase();
-  
+
   // Use stored current username
   const currentUserUsername = currentUsername?.toLowerCase() || '';
   
@@ -90,13 +90,16 @@ function FamilyMemberDetail({ member, onBack, onRemove }: FamilyMemberDetailProp
   useEffect(() => {
     if (!currentMember.username || !currentUserId) return;
     
+    // Store username in const to satisfy TypeScript type narrowing
+    const memberUsername = currentMember.username;
+    
     let subscription: any = null;
     
     const setupRealtime = async () => {
       try {
         // Find the connection ID
         const connections = await familyRequestService.getAcceptedConnections(currentUserId);
-        const connection = connections.find(c => c.username === currentMember.username?.toLowerCase());
+        const connection = connections.find(c => c.username === memberUsername.toLowerCase());
         
         if (!connection) return;
         
@@ -104,7 +107,7 @@ function FamilyMemberDetail({ member, onBack, onRemove }: FamilyMemberDetailProp
         
         // Load initial messages
         const initialMessages = await familyMessageService.getMessages(connection.connectionId);
-        updateFamilyMemberMessages(currentMember.username, initialMessages);
+        updateFamilyMemberMessages(memberUsername, initialMessages);
         
         // Set up real-time subscription for new messages
         subscription = supabase
@@ -120,7 +123,7 @@ function FamilyMemberDetail({ member, onBack, onRemove }: FamilyMemberDetailProp
             async (payload) => {
               // Reload all messages when a new one is inserted
               const updatedMessages = await familyMessageService.getMessages(connection.connectionId);
-              updateFamilyMemberMessages(currentMember.username, updatedMessages);
+              updateFamilyMemberMessages(memberUsername, updatedMessages);
             }
           )
           .on(
@@ -134,7 +137,7 @@ function FamilyMemberDetail({ member, onBack, onRemove }: FamilyMemberDetailProp
             async (payload) => {
               // Reload all messages when one is updated (e.g., marked as read)
               const updatedMessages = await familyMessageService.getMessages(connection.connectionId);
-              updateFamilyMemberMessages(currentMember.username, updatedMessages);
+              updateFamilyMemberMessages(memberUsername, updatedMessages);
             }
           )
           .subscribe();
@@ -193,12 +196,12 @@ function FamilyMemberDetail({ member, onBack, onRemove }: FamilyMemberDetailProp
   return (
     <div className="space-y-4 pb-6">
       <div className="flex items-center justify-between">
-        <button 
-          onClick={onBack}
-          className="text-[var(--color-sage)] font-medium flex items-center gap-1"
-        >
-          ← Back to family
-        </button>
+      <button 
+        onClick={onBack}
+        className="text-[var(--color-sage)] font-medium flex items-center gap-1"
+      >
+        ← Back to family
+      </button>
         {onRemove && (
           <button
             onClick={() => {
@@ -235,7 +238,7 @@ function FamilyMemberDetail({ member, onBack, onRemove }: FamilyMemberDetailProp
         <h3 className="font-display font-semibold text-[var(--color-charcoal)] mb-4 flex items-center gap-2">
           <MessageCircle size={18} className="text-[var(--color-sage)]" />
           Messages
-        </h3>
+          </h3>
         
         <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
           {messages.length > 0 ? (
@@ -261,8 +264,8 @@ function FamilyMemberDetail({ member, onBack, onRemove }: FamilyMemberDetailProp
                       <p className={`text-xs mt-1 ${isFromMe ? 'opacity-75' : 'text-[var(--color-stone)]'}`}>
                         {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
-                    </div>
-                  </div>
+                </div>
+              </div>
                 );
               })}
               <div ref={messagesEndRef} />
@@ -490,7 +493,7 @@ export function FamilyHub() {
     setError(null);
     try {
       await requestFamilyConnection(username, name, relationship);
-      setShowAddForm(false);
+    setShowAddForm(false);
       // Success - request sent state will be shown automatically
     } catch (err: any) {
       setError(err.message || 'Failed to send connection request. Please try again.');
@@ -599,7 +602,7 @@ export function FamilyHub() {
     return (
       <FamilyMemberDetail 
         member={latestMember} 
-        onBack={() => setSelectedMember(null)}
+        onBack={() => setSelectedMember(null)} 
         onRemove={() => handleRemoveMember(latestMember.id)}
       />
     );
@@ -626,19 +629,19 @@ export function FamilyHub() {
               Requests ({pendingRequests.length})
             </Button>
           )}
-          <Button 
-            variant="secondary" 
-            size="sm" 
-            icon={<Plus size={16} />}
+        <Button 
+          variant="secondary" 
+          size="sm" 
+          icon={<Plus size={16} />}
             onClick={() => {
               setShowAddForm(true);
               setError(null);
             }}
             disabled={isLoading}
-          >
-            Add
-          </Button>
-        </div>
+        >
+          Add
+        </Button>
+      </div>
       </div>
 
       {error && (

@@ -66,6 +66,7 @@ interface AppState {
   // Talk feature
   talkSessions: TalkSession[];
   healthCards: HealthCard[];
+  medicalJournal: MedicalJournal | null;
   
   // Family requests
   familyRequests: FamilyRequest[];
@@ -102,6 +103,8 @@ interface AppState {
   addTalkSession: (session: TalkSession) => void;
   addHealthCard: (card: HealthCard) => void;
   confirmHealthCard: (cardId: string) => void;
+  addHealthEntry: (entry: HealthEntry) => void;
+  shareHealthEntryToFamily: (entry: HealthEntry, memberUsername: string) => void;
   addMemorySession: (session: MemorySession) => void;
   updateMemorySession: (sessionId: string, updates: Partial<MemorySession>) => void;
   addBiographyEntry: (entry: BiographyEntry) => void;
@@ -160,6 +163,7 @@ export const useStore = create<AppState>()(
       isDarkMode: false,
       talkSessions: [],
       healthCards: [],
+      medicalJournal: null,
       familyRequests: [],
       memorySessions: [],
       biography: null,
@@ -1386,6 +1390,32 @@ export const useStore = create<AppState>()(
           card.id === cardId ? { ...card, confirmed: true } : card
         )
       })),
+      
+      addHealthEntry: (entry) => {
+        set((state) => {
+          const currentJournal = state.medicalJournal || {
+            id: crypto.randomUUID(),
+            userId: state.currentUserId || 'unknown',
+            entries: [],
+            lastUpdated: new Date()
+          };
+          return {
+            medicalJournal: {
+              ...currentJournal,
+              entries: [...currentJournal.entries, entry],
+              lastUpdated: new Date()
+            }
+          };
+        });
+      },
+      
+      shareHealthEntryToFamily: (entry, memberUsername) => {
+        // This function shares a health entry to a family member
+        // For now, we'll just log it. In a full implementation, this would
+        // send a message to the family member with the health entry details
+        console.log('Sharing health entry to family member:', memberUsername, entry);
+        // TODO: Implement actual sharing via family messages
+      },
       
       addMemorySession: (session) => {
         const state = useStore.getState();

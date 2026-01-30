@@ -394,6 +394,7 @@ interface FamilyRequestCardProps {
   request: FamilyRequest;
   onAccept: () => void;
   onReject: () => void;
+  isLoading?: boolean;
 }
 
 function FamilyRequestCard({ request, onAccept, onReject, isLoading }: FamilyRequestCardProps) {

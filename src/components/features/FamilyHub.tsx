@@ -27,10 +27,14 @@ interface FamilyMemberCardProps {
 }
 
 function FamilyMemberCard({ member, onClick }: FamilyMemberCardProps) {
-  const { currentUsername } = useStore();
+  const { currentUsername, user } = useStore();
   const initials = member.name.split(' ').map(n => n[0]).join('').toUpperCase();
+  
+  // Get the latest member data from store to ensure reactive updates
+  const latestMember = user?.familyMembers?.find(m => m.id === member.id) || member;
+  
   // Only count messages that are unread AND not from the current user
-  const unreadCount = member.messages.filter(m => 
+  const unreadCount = (latestMember.messages || []).filter(m => 
     !m.read && 
     m.fromUsername?.toLowerCase() !== currentUsername?.toLowerCase()
   ).length;
@@ -47,8 +51,8 @@ function FamilyMemberCard({ member, onClick }: FamilyMemberCardProps) {
               {capitalizeWords(member.name)}
           </h3>
             {unreadCount > 0 && (
-              <span className="w-5 h-5 rounded-full bg-[var(--color-terracotta)] text-white text-xs flex items-center justify-center">
-                {unreadCount}
+              <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-[var(--color-terracotta)] text-white text-xs font-semibold flex items-center justify-center">
+                {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
           </div>
@@ -72,30 +76,31 @@ interface FamilyMemberDetailProps {
 function FamilyMemberDetail({ member, onBack, onRemove }: FamilyMemberDetailProps) {
   const [messageText, setMessageText] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const { user, sendFamilyMessage, markFamilyMessageRead, currentUsername, currentUserId, updateFamilyMemberMessages } = useStore();
+  const { user, sendFamilyMessage, markFamilyMessageRead, currentUsername, currentUserId, updateFamilyMemberMessages, addFamilyMessage } = useStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const connectionIdRef = useRef<string | null>(null);
   
-  // Always get the latest member data from the store
+  // Always get the latest member data from the store - this ensures reactive updates
   const currentMember = user?.familyMembers?.find(m => m.id === member.id) || member;
   
   // Get messages from the current member (will update when store updates)
-  const messages = currentMember.messages || [];
+  // Force re-render by using the full user object dependency
+  const messages = (user?.familyMembers?.find(m => m.id === member.id)?.messages || currentMember.messages || []);
   const initials = currentMember.name.split(' ').map(n => n[0]).join('').toUpperCase();
 
   // Use stored current username
   const currentUserUsername = currentUsername?.toLowerCase() || '';
   
-  // Load messages and set up real-time subscription
+  // Load initial messages when viewing a member (real-time updates are handled globally)
   useEffect(() => {
     if (!currentMember.username || !currentUserId) return;
     
     // Store username in const to satisfy TypeScript type narrowing
     const memberUsername = currentMember.username;
     
-    let subscription: any = null;
+    let localSubscription: any = null;
     
-    const setupRealtime = async () => {
+    const loadInitialMessages = async () => {
       try {
         // Find the connection ID
         const connections = await familyRequestService.getAcceptedConnections(currentUserId);
@@ -109,20 +114,23 @@ function FamilyMemberDetail({ member, onBack, onRemove }: FamilyMemberDetailProp
         const initialMessages = await familyMessageService.getMessages(connection.connectionId);
         updateFamilyMemberMessages(memberUsername, initialMessages);
         
-        // Set up real-time subscription for new messages
-        subscription = supabase
-          .channel(`family_messages:${connection.connectionId}`)
+        // Set up a local subscription for this specific connection for faster updates
+        // This is in addition to the global subscription
+        const connectionId = connection.connectionId;
+        localSubscription = supabase
+          .channel(`family_messages:local:${connectionId}`)
           .on(
             'postgres_changes',
             {
               event: 'INSERT',
               schema: 'public',
               table: 'family_messages',
-              filter: `connection_id=eq.${connection.connectionId}`
+              filter: `connection_id=eq.${connectionId}`
             },
             async (payload) => {
-              // Reload all messages when a new one is inserted
-              const updatedMessages = await familyMessageService.getMessages(connection.connectionId);
+              console.log('📨 Local real-time message received:', payload.new);
+              // Reload messages immediately for this connection
+              const updatedMessages = await familyMessageService.getMessages(connectionId);
               updateFamilyMemberMessages(memberUsername, updatedMessages);
             }
           )
@@ -132,26 +140,28 @@ function FamilyMemberDetail({ member, onBack, onRemove }: FamilyMemberDetailProp
               event: 'UPDATE',
               schema: 'public',
               table: 'family_messages',
-              filter: `connection_id=eq.${connection.connectionId}`
+              filter: `connection_id=eq.${connectionId}`
             },
             async (payload) => {
-              // Reload all messages when one is updated (e.g., marked as read)
-              const updatedMessages = await familyMessageService.getMessages(connection.connectionId);
+              console.log('📝 Local real-time message updated:', payload.new);
+              // Reload messages when updated (e.g., marked as read)
+              const updatedMessages = await familyMessageService.getMessages(connectionId);
               updateFamilyMemberMessages(memberUsername, updatedMessages);
             }
           )
-          .subscribe();
+          .subscribe((status) => {
+            console.log('📡 Local subscription status:', status);
+          });
       } catch (error) {
-        console.error('Error setting up real-time subscription:', error);
+        console.error('Error loading initial messages:', error);
       }
     };
     
-    setupRealtime();
+    loadInitialMessages();
     
-    // Cleanup subscription on unmount
     return () => {
-      if (subscription) {
-        supabase.removeChannel(subscription);
+      if (localSubscription) {
+        supabase.removeChannel(localSubscription);
       }
     };
   }, [currentMember.username, currentUserId, updateFamilyMemberMessages]);
@@ -449,7 +459,9 @@ export function FamilyHub() {
     rejectFamilyRequest,
     familyRequests,
     currentUserId,
-    loadFamilyData
+    loadFamilyData,
+    addFamilyMessage,
+    updateFamilyMemberMessages
   } = useStore();
   
   const [selectedMember, setSelectedMember] = useState<FamilyMember | null>(null);
@@ -457,6 +469,281 @@ export function FamilyHub() {
   const [showRequests, setShowRequests] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<FamilyRequest[]>([]);
   const [sentRequests, setSentRequests] = useState<FamilyRequest[]>([]);
+  
+  // Set up global real-time subscriptions for all family messages and requests
+  useEffect(() => {
+    if (!currentUserId) return;
+    
+    let messageSubscriptions: { receiver?: any } = {};
+    let requestSubscription: { from?: any; to?: any } = {};
+    let pollInterval: NodeJS.Timeout | null = null;
+    
+    const setupRealtimeSubscriptions = async () => {
+      try {
+        // Helper to get and update connection map
+        const getConnectionMap = async () => {
+          const connections = await familyRequestService.getAcceptedConnections(currentUserId);
+          return new Map(connections.map(c => [c.connectionId, c]));
+        };
+        
+        let connectionMap = await getConnectionMap();
+        
+        // Function to refresh connection map (used in callbacks)
+        const refreshConnectionMap = async () => {
+          connectionMap = await getConnectionMap();
+        };
+        
+        // Set up subscriptions for messages where user is sender or receiver
+        // Use a simple channel name and subscribe to all changes
+        // If real-time fails, we'll fall back to polling
+        let realtimeWorking = false;
+        
+        const messageSubscription = supabase
+          .channel(`family_messages_${currentUserId}`, {
+            config: {
+              broadcast: { self: true },
+              presence: { key: currentUserId }
+            }
+          })
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'family_messages'
+            },
+            (payload) => {
+              // Use non-async callback to prevent subscription errors
+              (async () => {
+                try {
+                  console.log('📨 Real-time message received:', payload);
+                  
+                  if (!payload || !payload.new) {
+                    console.error('❌ Invalid payload in real-time event:', payload);
+                    return;
+                  }
+                  
+                  // Type assertion for payload.new
+                  const newData = payload.new as any;
+                  
+                  // Filter: only process if user is sender or receiver
+                  const isReceiver = newData.receiver_user_id === currentUserId;
+                  const isSender = newData.sender_user_id === currentUserId;
+                  
+                  if (!isReceiver && !isSender) {
+                    // Not for this user, ignore
+                    return;
+                  }
+                  
+                  // Get connection info
+                  const connectionId = newData.connection_id;
+                  if (!connectionId) {
+                    console.error('❌ No connection_id in payload');
+                    return;
+                  }
+                  
+                  let connection = connectionMap.get(connectionId);
+                  
+                  if (!connection) {
+                    // Connection might not be in map yet, reload connections
+                    await refreshConnectionMap();
+                    connection = connectionMap.get(connectionId);
+                  }
+                  
+                  if (!connection) {
+                    console.warn('⚠️ Connection not found for connectionId:', connectionId);
+                    // Try to reload all family data
+                    await loadFamilyData();
+                    return;
+                  }
+                  
+                  // Fetch sender/receiver details in parallel for speed
+                  const [senderResult, receiverResult] = await Promise.all([
+                    supabase
+                      .from('users')
+                      .select('username, preferred_name')
+                      .eq('id', newData.sender_user_id)
+                      .single(),
+                    supabase
+                      .from('users')
+                      .select('username, preferred_name')
+                      .eq('id', newData.receiver_user_id)
+                      .single()
+                  ]);
+                  
+                  const senderData = senderResult.data;
+                  const receiverData = receiverResult.data;
+                  
+                  if (!senderData || !receiverData) {
+                    console.error('❌ Failed to fetch sender/receiver data. Reloading all messages...');
+                    // Fallback: reload all messages
+                    const updatedMessages = await familyMessageService.getMessages(connectionId);
+                    updateFamilyMemberMessages(connection.username, updatedMessages);
+                    return;
+                  }
+                  
+                  // Create message object
+                  const newMessage = {
+                    id: newData.id,
+                    fromUsername: senderData.username || '',
+                    fromName: senderData.preferred_name || '',
+                    toUsername: receiverData.username || '',
+                    content: newData.content,
+                    timestamp: new Date(newData.timestamp),
+                    read: newData.read || false
+                  };
+                  
+                  console.log('✅ Adding message to store:', newMessage, 'for username:', connection.username);
+                  
+                  // Add message immediately to store
+                  addFamilyMessage(connection.username, newMessage);
+                } catch (error) {
+                  console.error('❌ Error processing real-time message:', error);
+                  // Don't rethrow - just log to prevent breaking subscription
+                }
+              })();
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'family_messages'
+            },
+            (payload) => {
+              // Use non-async callback to prevent subscription errors
+              (async () => {
+                try {
+                  console.log('📝 Real-time message updated:', payload);
+                  
+                  if (!payload || !payload.new) {
+                    console.error('❌ Invalid payload in UPDATE event:', payload);
+                    return;
+                  }
+                  
+                  // Type assertion for payload.new
+                  const updateData = payload.new as any;
+                  
+                  // Filter: only process if user is sender or receiver
+                  const isReceiver = updateData.receiver_user_id === currentUserId;
+                  const isSender = updateData.sender_user_id === currentUserId;
+                  
+                  if (!isReceiver && !isSender) {
+                    // Not for this user, ignore
+                    return;
+                  }
+                  
+                  // Get connection info
+                  const connectionId = updateData.connection_id;
+                  if (!connectionId) {
+                    console.error('❌ No connection_id in UPDATE payload');
+                    return;
+                  }
+                  
+                  let connection = connectionMap.get(connectionId);
+                  
+                  if (!connection) {
+                    await refreshConnectionMap();
+                    connection = connectionMap.get(connectionId);
+                  }
+                  
+                  if (connection) {
+                    // Reload all messages when one is updated (e.g., marked as read)
+                    const updatedMessages = await familyMessageService.getMessages(connectionId);
+                    updateFamilyMemberMessages(connection.username, updatedMessages);
+                  }
+                } catch (error) {
+                  console.error('❌ Error processing real-time message update:', error);
+                }
+              })();
+            }
+          )
+          .subscribe((status, err) => {
+            console.log('📡 Message subscription status:', status);
+            if (status === 'SUBSCRIBED') {
+              console.log('✅ Successfully subscribed to all messages');
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+              console.error('❌ Message subscription error:', status, err);
+            } else if (status === 'CLOSED') {
+              console.log('📡 Message subscription closed (normal on cleanup)');
+            }
+          });
+        
+        // Store subscription
+        messageSubscriptions.receiver = messageSubscription;
+        
+        // Set up real-time subscriptions for family requests (separate for from/to)
+        const requestFromSubscription = supabase
+          .channel(`family_requests:from:${currentUserId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'family_requests',
+              filter: `from_user_id=eq.${currentUserId}`
+            },
+            async () => {
+              await loadFamilyData();
+              if (user?.id) {
+                const pending = await familyRequestService.getPendingRequests(user.id);
+                setPendingRequests(pending);
+              }
+              await refreshConnectionMap();
+            }
+          )
+          .subscribe();
+        
+        const requestToSubscription = supabase
+          .channel(`family_requests:to:${currentUserId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'family_requests',
+              filter: `to_user_id=eq.${currentUserId}`
+            },
+            async () => {
+              await loadFamilyData();
+              if (user?.id) {
+                const pending = await familyRequestService.getPendingRequests(user.id);
+                setPendingRequests(pending);
+              }
+              await refreshConnectionMap();
+            }
+          )
+          .subscribe();
+        
+        requestSubscription.from = requestFromSubscription;
+        requestSubscription.to = requestToSubscription;
+      } catch (error) {
+        console.error('Error setting up real-time subscriptions:', error);
+      }
+    };
+    
+    setupRealtimeSubscriptions();
+    
+    // Cleanup subscriptions on unmount
+    return () => {
+      if (messageSubscriptions.receiver) {
+        supabase.removeChannel(messageSubscriptions.receiver);
+      }
+      if (requestSubscription) {
+        if (requestSubscription.from) {
+          supabase.removeChannel(requestSubscription.from);
+        }
+        if (requestSubscription.to) {
+          supabase.removeChannel(requestSubscription.to);
+        }
+      }
+      // Clear polling interval
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [currentUserId, loadFamilyData, addFamilyMessage, updateFamilyMemberMessages, user?.id]);
   
   // Load pending requests on mount and when requests change
   useEffect(() => {

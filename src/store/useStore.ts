@@ -98,6 +98,7 @@ interface AppState {
   sendFamilyMessage: (toUsername: string, content: string) => void;
   markFamilyMessageRead: (messageId: string) => void;
   updateFamilyMemberMessages: (username: string, messages: FamilyMessage[]) => void;
+  addFamilyMessage: (username: string, message: FamilyMessage) => void;
   loadFamilyData: () => Promise<void>;
   // Talk actions
   addTalkSession: (session: TalkSession) => void;
@@ -1287,6 +1288,40 @@ export const useStore = create<AppState>()(
                 ? { ...m, messages }
                 : m
             )
+          }
+        });
+      },
+      
+      // Add a single message to a family member (for real-time updates)
+      addFamilyMessage: (username, message) => {
+        const state = useStore.getState();
+        if (!state.user) return;
+        
+        set({
+          user: {
+            ...state.user,
+            familyMembers: state.user.familyMembers.map(m => {
+              if (m.username === username.toLowerCase().trim()) {
+                // Check if message already exists to avoid duplicates
+                const existingMessage = m.messages.find(msg => msg.id === message.id);
+                if (existingMessage) {
+                  // Update existing message (e.g., when marked as read)
+                  return {
+                    ...m,
+                    messages: m.messages.map(msg => 
+                      msg.id === message.id ? message : msg
+                    )
+                  };
+                } else {
+                  // Add new message
+                  return {
+                    ...m,
+                    messages: [...m.messages, message]
+                  };
+                }
+              }
+              return m;
+            })
           }
         });
       },
